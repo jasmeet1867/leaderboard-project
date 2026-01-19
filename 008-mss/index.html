@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -81,17 +82,9 @@ background-color:red}
 }
 
 @keyframes uncheck {
-	0% {
-		transform: rotate(0deg);
-	}
-	
-	25%, 50% {
-		transform: rotate(-20deg);
-	}
-	
-	100% {
-		transform: rotate(0deg);
-	}
+	0% { transform: rotate(0deg); }
+	25%, 50% { transform: rotate(-20deg); }
+	100% { transform: rotate(0deg); }
 }
 
 .checkbox #ckb.active:not(:checked) + label .ball {
@@ -99,13 +92,8 @@ background-color:red}
 }
 
 @keyframes moveBallLeft {
-	0%, 25% {
-		transform: translateX(100px);
-	}
-	
-	50%, 100% {
-		transform: translateX(0px);
-	}
+	0%, 25% { transform: translateX(100px); }
+	50%, 100% { transform: translateX(0px); }
 }
 
 .checkbox #ckb.active:checked + label {
@@ -114,45 +102,43 @@ background-color:red}
 }
 
 @keyframes check {
-	0% {
-		transform: rotate(0deg);
-	}
-	
-	25%, 50% {
-		transform: rotate(20deg);
-	}
-	
-	100% {
-		transform: rotate(0deg);
-	}
+	0% { transform: rotate(0deg); }
+	25%, 50% { transform: rotate(20deg); }
+	100% { transform: rotate(0deg); }
 }
 
 .checkbox #ckb.active:checked + label .ball {
-/* 	left: 105px; */
 	animation: moveBallRight 2s ease-in forwards;
 }
 
 @keyframes moveBallRight {
-	0%, 25% {
-		transform: translateX(0px);
-	}
-	
-	50%, 100% {
-		transform: translateX(100px);
-	}
+	0%, 25% { transform: translateX(0px); }
+	50%, 100% { transform: translateX(100px); }
 }
 
-
+/* scoreboard */
+#scoreboard {
+  margin: 10px 0;
+  font-size: 12pt;
+}
 </style>
 
 </head>
 <body>
 <H1>संस्कृतम्  Minesweeper</H1>
+
+<!-- ✅ SCOREBOARD -->
+<div id="scoreboard">
+  Wins: <strong id="msWins">0</strong> |
+  Last: <strong id="msLast">--</strong>s |
+  Best: <strong id="msBest">--</strong>s
+</div>
+
 <progress id="mss" value="0" max="80"> 0% </progress>
-<table id=grid>
-</table>
+<table id="grid"></table>
 <progress id="gm" value="0" max="20" style="display:none"> 0% </progress>
 <br>
+
 <center>
 <div class="checkbox">
 	<input type="checkbox" id="ckb"/>
@@ -161,56 +147,99 @@ background-color:red}
 	</label>
 </div>
 </center>
+
 <BUTTON onclick="generateGrid();">पुनः - Again</BUTTON>
 <br>
-<p> Based on minesweeper game by 101computing.net
+<p> Based on minesweeper game by 101computing.net</p>
+
 <script>
+/* ---------------- SCORE SYSTEM ---------------- */
+let msWins = Number(localStorage.getItem("msWins") || 0);
+let msBest = Number(localStorage.getItem("msBest") || 0); // 0 = none yet
+let msLast = Number(localStorage.getItem("msLast") || 0);
+
+let startTime = 0;
+let timerInterval = null;
+
+function renderMsScore() {
+  document.getElementById("msWins").textContent = msWins;
+  document.getElementById("msLast").textContent = msLast ? msLast : "--";
+  document.getElementById("msBest").textContent = msBest ? msBest : "--";
+}
+
+function startMsTimer() {
+  startTime = Date.now();
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {}, 250);
+}
+
+function stopMsTimerSeconds() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
+  return Math.floor((Date.now() - startTime) / 1000);
+}
+
+renderMsScore();
+/* -------------- END SCORE SYSTEM -------------- */
+
 function chg() {
 	checkbox.classList.add('active');
 	if (document.getElementsByClassName('ball')[0].innerHTML=="७") {
-	document.getElementsByClassName('ball')[0].innerHTML="१०"; siz=10;}
+		document.getElementsByClassName('ball')[0].innerHTML="१०";
+		siz=10;
+	}
 	else {
-	document.getElementsByClassName('ball')[0].innerHTML="७";siz=7;}
+		document.getElementsByClassName('ball')[0].innerHTML="७";
+		siz=7;
+	}
 	generateGrid();
 }
 const checkbox = document.getElementById('ckb');
 
 checkbox.addEventListener('change', chg);
-	const urlParams = new URLSearchParams(window.location.search);
+
+const urlParams = new URLSearchParams(window.location.search);
 var siz = urlParams.get('s');
-	//var d = parseInt(getQueryStringValue("d"));
+
 if (siz && (siz == 10) || (siz == 7)) {
-}
-else
+} else {
 	siz=10;
+}
 
 document.addEventListener('contextmenu', event => event.preventDefault());
-//minesweeper game by 101computing.net - www.101computing.et/minesweeper-in-javascript/
+
 var grid = document.getElementById("grid");
 var testMode = false; //Turn this variable to true to see where the mines are
+
 generateGrid();
 if (siz==7) chg();
+
 function generateGrid() {
   document.getElementById("mss").value=0;
-  document.getElementById("mss").max=parseInt((siz*siz)-(siz*siz)/5)
+  document.getElementById("mss").max=parseInt((siz*siz)-(siz*siz)/5);
   document.getElementById("gm").value=0;
+
   grid.innerHTML="";
   for (var i=0; i<siz; i++) {
     row = grid.insertRow(i);
     for (var j=0; j<siz; j++) {
       cell = row.insertCell(j);
-      cell.onmousedown = function(ev) { if (ev.button==2) {
-	  markCell(this);
-	  //ev.returnValue = false;ev.preventDefault();return false;
-	  } 
-	  else clickCell(this); 
-	  };
+      cell.onmousedown = function(ev) { 
+        if (ev.button==2) {
+          markCell(this);
+        } else {
+          clickCell(this);
+        }
+      };
       var mine = document.createAttribute("data-mine");       
       mine.value = "false";             
       cell.setAttributeNode(mine);
     }
   }
   addMines();
+
+  // ✅ start timer each new game
+  startMsTimer();
 }
 
 function addMines() {
@@ -219,86 +248,103 @@ function addMines() {
     var row = Math.floor((Math.random() * 10) % siz);
     var col = Math.floor((Math.random() * 10) % siz);
     var cell = grid.rows[row].cells[col];
-//	if (cell.innerHTML=="X") cell.innerHTML="y" ;else cell.innerHTML="X";
-	 //if (cell.getAttribute("data-mine")) console.log("repeat");
     cell.setAttribute("data-mine","true");
     if (testMode) cell.innerHTML="X";
   }
 }
 
 function revealMines() {
-    //Highlight all mines in red
-    for (var i=0; i<siz; i++) {
-      for(var j=0; j<siz; j++) {
-        var cell = grid.rows[i].cells[j];
-        if (cell.getAttribute("data-mine")=="true") cell.style.backgroundColor="#FF0000";
-      }
+  //Highlight all mines in red
+  for (var i=0; i<siz; i++) {
+    for (var j=0; j<siz; j++) {
+      var cell = grid.rows[i].cells[j];
+      if (cell.getAttribute("data-mine")=="true") cell.style.backgroundColor="#FF0000";
     }
+  }
 }
 
 function checkLevelCompletion() {
   var levelComplete = true;
-    for (var i=0; i<siz; i++) {
-      for(var j=0; j<siz; j++) {
-        if ((grid.rows[i].cells[j].getAttribute("data-mine")=="false") && (grid.rows[i].cells[j].innerHTML=="")) levelComplete=false;
+  for (var i=0; i<siz; i++) {
+    for (var j=0; j<siz; j++) {
+      if ((grid.rows[i].cells[j].getAttribute("data-mine")=="false") && (grid.rows[i].cells[j].innerHTML=="")) {
+        levelComplete = false;
       }
+    }
   }
+
   if (levelComplete) {
-    alert("जयः 🙂");
+    // ✅ WIN SCORE UPDATE
+    msLast = stopMsTimerSeconds();
+    msWins += 1;
+    if (msBest === 0 || msLast < msBest) msBest = msLast;
+
+    localStorage.setItem("msWins", msWins);
+    localStorage.setItem("msLast", msLast);
+    localStorage.setItem("msBest", msBest);
+
+    renderMsScore();
+
+    alert(`जयः 🙂  समयः: ${msLast}s`);
     revealMines();
-	 
   }
 }
+
 function markCell(cell) {
-if (cell.style.backgroundColor=="tomato")
-{
-cell.style.backgroundColor="";
-document.getElementById("gm").value-=1;
+  if (cell.style.backgroundColor=="tomato") {
+    cell.style.backgroundColor="";
+    document.getElementById("gm").value-=1;
+  } else {
+    document.getElementById("gm").value+=1;
+    cell.style.backgroundColor="tomato";
+  }
 }
-else
-{
-document.getElementById("gm").value+=1;
-cell.style.backgroundColor="tomato";
-}
-}
+
 function clickCell(cell) {
-cell.style.backgroundColor="";
+  cell.style.backgroundColor="";
   //Check if the end-user clicked on a mine
   if (cell.getAttribute("data-mine")=="true") {
     revealMines();
     alert("पराजयः 🙁");
-	for (var i=0; i<siz; i++) {
-	for (var j=0; j<siz; j++) {
-      var cell = grid.rows[i].cells[j];
-      cell.onclick = "" }
-	  }
+
+    // stop timer on loss
+    stopMsTimerSeconds();
+
+    for (var i=0; i<siz; i++) {
+      for (var j=0; j<siz; j++) {
+        var c = grid.rows[i].cells[j];
+        c.onclick = "";
+      }
+    }
   } else {
-  if (cell.className!="clicked")
-  document.getElementById("mss").value+=1;
+    if (cell.className!="clicked") document.getElementById("mss").value+=1;
+
     cell.className="clicked";
-	
+
     //Count and display the number of adjacent mines
     var mineCount=0;
     var cellRow = cell.parentNode.rowIndex;
     var cellCol = cell.cellIndex;
-    //alert(cellRow + " " + cellCol);
+
     for (var i=Math.max(cellRow-1,0); i<=Math.min(cellRow+1,siz-1); i++) {
-      for(var j=Math.max(cellCol-1,0); j<=Math.min(cellCol+1,siz-1); j++) {
+      for (var j=Math.max(cellCol-1,0); j<=Math.min(cellCol+1,siz-1); j++) {
         if (grid.rows[i].cells[j].getAttribute("data-mine")=="true") mineCount++;
       }
     }
+
     if (mineCount==0) cell.innerHTML=" ";
-	else
-	cell.innerHTML=Sanscript.t(String(mineCount),'iast', 'devanagari')
-    if (mineCount==0) { 
+    else cell.innerHTML = Sanscript.t(String(mineCount),'iast', 'devanagari');
+
+    if (mineCount==0) {
       //Reveal all adjacent cells as they do not have a mine
       for (var i=Math.max(cellRow-1,0); i<=Math.min(cellRow+1,siz-1); i++) {
-        for(var j=Math.max(cellCol-1,0); j<=Math.min(cellCol+1,siz-1); j++) {
+        for (var j=Math.max(cellCol-1,0); j<=Math.min(cellCol+1,siz-1); j++) {
           //Recursive Call
           if (grid.rows[i].cells[j].innerHTML=="") clickCell(grid.rows[i].cells[j]);
         }
       }
     }
+
     checkLevelCompletion();
   }
 }

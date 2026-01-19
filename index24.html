@@ -4,39 +4,135 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>शत.म् zat.am</title>
+
     <!-- font-awesome -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css"
     />
+
     <!-- styles -->
     <link rel="stylesheet" href="styles.css" />
   </head>
+
   <body>
+    <!-- Leaderboard (Aggregate Top 3 preview) -->
+    <div class="leaderboard-container">
+      <a class="leaderboard-btn" href="leaderboard.html">🏆 Leaderboard</a>
+
+      <div class="leaderboard-panel">
+        <div class="lb-title">🏆 Top Players</div>
+
+        <div class="lb-item gold">
+          🥇 <span id="p1Name">—</span>
+          <span id="p1Score">0</span>
+        </div>
+
+        <div class="lb-item silver">
+          🥈 <span id="p2Name">—</span>
+          <span id="p2Score">0</span>
+        </div>
+
+        <div class="lb-item bronze">
+          🥉 <span id="p3Name">—</span>
+          <span id="p3Score">0</span>
+        </div>
+
+        <a href="leaderboard.html" class="lb-link">View Full Leaderboard →</a>
+      </div>
+    </div>
+
     <section class="menu">
       <!-- title -->
       <div class="title">
-	  <h2>संस्कृतभारती <!--जयतु संस्कृतम् ।  -->  </h2>
-        <!--<h2><span style="color:red">श</span><span style="color:yellow">त</span>.<span style="color:blue">म्</span></h2>-->
+        <h2>संस्कृतभारती</h2>
         <div class="underline"></div>
       </div>
-      <!-- filter buttons -->
-      <div class="btn-container">
-        <!-- <button type="button" class="filter-btn" data-id="all">all</button>
-        <button type="button" class="filter-btn" data-id="breakfast">
-          breakfast
-        </button>
-        <button type="button" class="filter-btn" data-id="lunch">lunch</button>
-        <button type="button" class="filter-btn" data-id="shakes">
-          shakes
-        </button> -->
-      </div>
+
+      <!-- filter buttons (app.js fills these) -->
+      <div class="btn-container"></div>
+
       <!-- menu items -->
-      <div class="section-center">
-        
-      </div>
+      <div class="section-center"></div>
     </section>
-    <!-- javascript -->
+
+    <!-- your existing portal JS -->
     <script src="app.js"></script>
+
+    <!-- ✅ inject Scoring Games button into SAME row as Telegram -->
+    <script>
+      window.addEventListener("DOMContentLoaded", () => {
+        // wait a tick so app.js can finish building buttons
+        setTimeout(() => {
+          const btnContainer = document.querySelector(".btn-container");
+          if (!btnContainer) return;
+
+          // avoid duplicates if page reloads
+          if (btnContainer.querySelector('[data-id="scoring"]')) return;
+
+          const a = document.createElement("a");
+          a.className = "filter-btn";
+          a.setAttribute("data-id", "scoring");
+          a.href = "scoring.html"; 
+          a.textContent = "🎯 Scoring Games";
+
+          // put it at the end (right beside Telegram)
+          btnContainer.appendChild(a);
+        }, 0);
+      });
+    </script>
+
+    <!-- load Aggregate Top-3 from Firestore -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+      import {
+        getFirestore,
+        collection,
+        query,
+        orderBy,
+        limit,
+        getDocs
+      } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyA5-cHjL5iL8Arjqv2Pt2WecT8RTLw3Weg",
+        authDomain: "zatam-leaderboard.firebaseapp.com",
+        projectId: "zatam-leaderboard",
+        storageBucket: "zatam-leaderboard.firebasestorage.app",
+        messagingSenderId: "1053027312775",
+        appId: "1:1053027312775:web:43325a831ab077d017c422",
+        measurementId: "G-KP78X2DN6L"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      async function loadTop3() {
+        const q = query(
+          collection(db, "scores_aggregate"),
+          orderBy("totalScore", "desc"),
+          limit(3)
+        );
+
+        const snap = await getDocs(q);
+        const top = [];
+        snap.forEach((d) => top.push(d.data()));
+
+        const p1 = top[0] || { playerName: "—", totalScore: 0 };
+        const p2 = top[1] || { playerName: "—", totalScore: 0 };
+        const p3 = top[2] || { playerName: "—", totalScore: 0 };
+
+        document.getElementById("p1Name").textContent = p1.playerName || "—";
+        document.getElementById("p1Score").textContent = p1.totalScore ?? 0;
+
+        document.getElementById("p2Name").textContent = p2.playerName || "—";
+        document.getElementById("p2Score").textContent = p2.totalScore ?? 0;
+
+        document.getElementById("p3Name").textContent = p3.playerName || "—";
+        document.getElementById("p3Score").textContent = p3.totalScore ?? 0;
+      }
+
+      loadTop3();
+    </script>
   </body>
 </html>

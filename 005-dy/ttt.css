@@ -28,3 +28,17 @@ table tr {
 }
 #jayaH
 {color:red}
+.scoreboard {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 10px 0 14px 0;
+  flex-wrap: wrap;
+}
+.scoreboard button {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.scoreboard div {
+  font-size: 1.2em;
+}

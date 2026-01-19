@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Test Score</title>
+  </head>
+  <body>
+    <button id="add5">Add 5 points to Jessie</button>
+
+    <script type="module">
+      import { submitScore } from "./score-submit.js";
+
+      document.getElementById("add5").addEventListener("click", async () => {
+        try {
+          await submitScore("all_games", "Jessie", 5);
+          alert("Added 5 to Jessie ✅");
+        } catch (err) {
+          console.error(err);
+          alert("FAILED ❌ Check console (F12)");
+        }
+      });
+    </script>
+  </body>
+</html>

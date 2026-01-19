@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leaderboard</title>
+
+  <link rel="stylesheet" href="leaderboard.css" />
+</head>
+<body>
+
+  <div class="topbar">
+    <a class="back" href="index24.html">← Back</a>
+    <h1>Leaderboard</h1>
+  </div>
+
+  <div class="wrap">
+
+    <!-- Podium (your JS fills #podium) -->
+    <div class="podium" id="podium"></div>
+
+    <!-- Table card -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Top Players</h2>
+        <button id="refreshBtn" type="button">Refresh</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:80px;">Rank</th>
+              <th>Player</th>
+              <th style="width:140px;">Score</th>
+              <th style="width:140px;">Scope</th>
+              <th style="width:220px;">Updated</th>
+            </tr>
+          </thead>
+          <tbody id="rows">
+            <tr><td colspan="5" class="muted">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- KEEP your same leaderboard.js -->
+  <script type="module" src="leaderboard.js"></script>
+</body>
+</html>

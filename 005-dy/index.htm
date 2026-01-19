@@ -1,38 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>द्वन्द्वयुद्धम् dvandvayuddham - x/☺ </title>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>द्वन्द्वयुद्धम् dvandvayuddham - x/☺</title>
 
-    <link href="ttt.css" type="text/css" rel="stylesheet" />
-    <script src="ttt.js"></script>
-	<script src="ttti.js"></script>
-  </head>
-  <body>
-    <div id="app">
-      <div>
-        <h2 id="turn">कस्य kasya पर्यायः paryaayaH ? - <span id="player"></span> !</h2>
+  <link href="ttt.css" type="text/css" rel="stylesheet" />
+  <script src="ttt.js?v=2"></script>
+  <script src="ttti.js?v=2"></script>
+</head>
+
+<body>
+  <div id="app">
+    <div>
+      <h2 id="turn">कस्य kasya पर्यायः paryaayaH ? - <span id="player"></span> !</h2>
+
+      <div class="scoreboard">
+        <span>Player X: <strong id="scoreX">0</strong></span>
+        <span>Player ☺: <strong id="scoreSmiley">0</strong></span>
+        <span>Draws: <strong id="scoreDraw">0</strong></span>
+        <button id="resetScore" type="button">Reset</button>
       </div>
-      <table>
-        <tr"0">
-          <td class="0 0"></td>
-          <td class="0 1"></td>
-          <td class="0 2"></td>
-        </tr>
-        <tr>
-          <td class="1 0"></td>
-          <td class="1 1"></td>
-          <td class="1 2"></td>
-        </tr>
-        <tr>
-          <td class="2 0"></td>
-          <td class="2 1"></td>
-          <td class="2 2"></td>
-        </tr>
-      </table>
-	   <h1 id="jayaH"></h1>
     </div>
-  </body>
+
+    <table>
+      <tr>
+        <td data-row="0" data-col="0"></td>
+        <td data-row="0" data-col="1"></td>
+        <td data-row="0" data-col="2"></td>
+      </tr>
+      <tr>
+        <td data-row="1" data-col="0"></td>
+        <td data-row="1" data-col="1"></td>
+        <td data-row="1" data-col="2"></td>
+      </tr>
+      <tr>
+        <td data-row="2" data-col="0"></td>
+        <td data-row="2" data-col="1"></td>
+        <td data-row="2" data-col="2"></td>
+      </tr>
+    </table>
+
+    <h1 id="jayaH"></h1>
+  </div>
+
+  <!-- ✅ Firebase bridge -->
+  <script type="module">
+    import { submitScore } from "../score-submit.js";
+
+    // prevent multiple submits per round
+    let reported = false;
+
+    window.zatamLB = {
+      reportWin: async (winnerSymbol, winnerName) => {
+        if (reported) return;
+        reported = true;
+
+        // 1 point per win
+        await submitScore("dvandvayuddham_tictactoe", winnerName, 1);
+        console.log("✅ Submitted:", winnerName, winnerSymbol);
+      },
+      resetRound: () => {
+        reported = false;
+      }
+    };
+  </script>
+  <!-- Back to Home Button -->
+<a href="../index24.html" style="
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  z-index: 9999;
+  background: #ffffff;
+  color: #c48b2c;
+  border: 2px solid #c48b2c;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-family: Arial, sans-serif;
+  text-decoration: none;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+">
+  ← Home
+</a>
+</body>
 </html>

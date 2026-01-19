@@ -1,52 +1,62 @@
 class Game {
-  constructor (p1, p2) {
-    this.p1 = p1
-    this.p2 = p2
-    this.board = [[null, null, null], [null, null, null], [null, null, null]]
-    //this.player = Math.random() < 0.5 ? this.p1 : this.p2
-	this.player = this.p1
-    this.sym = 'x'
+  constructor(p1, p2) {
+    this.p1 = p1;
+    this.p2 = p2;
+    this.board = [
+      [null, null, null],
+      [null, null, null],
+      [null, null, null],
+    ];
+    this.player = this.p1;
+    this.sym = "x";
   }
 
-  turn (row, col) {
-    col = col || row
-    this.board[row][col] = this.sym
+  turn(row, col) {
+    // IMPORTANT: keep col=0 valid
+    if (col === undefined || col === null) col = row;
+    this.board[row][col] = this.sym;
   }
 
-  nextPlayer () {
-    this.player = this.player === this.p1 ? this.p2 : this.p1
-    this.sym = this.sym === 'x' ? '☺' : 'x'
+  nextPlayer() {
+    this.player = this.player === this.p1 ? this.p2 : this.p1;
+    this.sym = this.sym === "x" ? "☺" : "x";
   }
 
-  hasWinner () {
-    return this.rowWin() || this.colWin() || this.diagWin()
+  hasWinner() {
+    return this.rowWin() || this.colWin() || this.diagWin();
   }
 
-  rowWin () {
-    let win = false
+  isDraw() {
+    if (this.hasWinner()) return false;
     for (let r = 0; r < 3; r++) {
-      const row = this.board[r]
-      if (row[0] === null) { continue }
-      win = win || (row[0] === row[1] && row[0] === row[2])
+      for (let c = 0; c < 3; c++) {
+        if (this.board[r][c] === null) return false;
+      }
     }
-
-    return win
+    return true;
   }
 
-  colWin () {
-    let win = false
+  rowWin() {
+    for (let r = 0; r < 3; r++) {
+      const row = this.board[r];
+      if (row[0] !== null && row[0] === row[1] && row[0] === row[2]) return true;
+    }
+    return false;
+  }
+
+  colWin() {
     for (let c = 0; c < 3; c++) {
-      const col = this.board
-      if (col[0][c] === null) { continue }
-      win = win || (col[0][c] === col[1][c] && col[0][c] === col[2][c])
+      const b = this.board;
+      if (b[0][c] !== null && b[0][c] === b[1][c] && b[0][c] === b[2][c]) return true;
     }
-
-    return win
+    return false;
   }
 
-  diagWin () {
-    const b = this.board
-    return ((b[0][0] !== null && b[0][0] === b[1][1] && b[0][0] === b[2][2]) ||
-            (b[0][2] !== null && b[0][2] === b[1][1] && b[0][2] === b[2][0]))
+  diagWin() {
+    const b = this.board;
+    return (
+      (b[0][0] !== null && b[0][0] === b[1][1] && b[0][0] === b[2][2]) ||
+      (b[0][2] !== null && b[0][2] === b[1][1] && b[0][2] === b[2][0])
+    );
   }
 }
