@@ -1,190 +1,236 @@
+<!-- lrn.htm (Day 1) — COMPLETE FIXED FILE -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>शब्दावली </title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .grid {
-            width: 80vw;
-            height: 80vh;
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>शब्दावली</title>
 
-            /* Center the grid in the page */
-            margin: auto;
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 20px; }
 
-            /* Optional: scroll if content overflows vertically */
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-        }
+    .grid{
+      width: 80vw; height: 80vh; margin: auto;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 15px; overflow-y: auto; padding-bottom: 120px;
+    }
 
-        .card {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s;
-        }
+    .card{
+      background: white; padding: 15px; border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: transform 0.2s; text-align: center;
+    }
+    .card:hover{ transform: scale(1.03); }
 
-        .card:hover {
-            transform: scale(1.03);
-        }
+    .word{ font-size: 1.2em; font-weight: bold; margin-bottom: 8px; color: #333; }
+    .definition{ font-size: 0.95em; color: #555; }
 
-        .word {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #333;
-        }
+    .playBtn{
+      margin-top: 10px; padding: 8px 12px;
+      border-radius: 10px; border: 1px solid #ccc;
+      cursor: pointer; background: #fff; font-size: 16px;
+    }
+    .playBtn:hover{ background:#f0f0f0; }
 
-        .definition {
-            font-size: 0.95em;
-            color: #555;
-        }
+    #submitScoreBtn{
+      position: fixed; right: 20px; bottom: 20px;
+      padding: 12px 16px; border: none; border-radius: 12px;
+      background: #1f2937; color: #fff; font-size: 14px;
+      cursor: pointer; z-index: 9999;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    }
+    #submitScoreBtn:disabled{ opacity: 0.6; cursor: not-allowed; }
 
-@media print {
-.k
-{
-border-left:4px ridge green;
-}
-.p
-{
-border-left:3px groove blue;
-}
-.s
-{
-border-left:3px groove red;
-}
-.n
-{
-border-left:3px groove black;
-}
+    #scoreBadge{
+      position: fixed; left: 20px; bottom: 24px;
+      padding: 10px 14px; border-radius: 12px;
+      background: #ffffff; color: #111827; font-size: 14px;
+      z-index: 9999; box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+      border: 1px solid #e5e7eb;
+    }
 
-button {
-display: none !important;
-}
-}
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/@sanskrit-coders/sanscript@1.1.0/sanscript.min.js"></script>
-    <script type="text/javascript" src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+    @media print {
+      .k { border-left: 4px ridge green; }
+      .p { border-left: 3px groove blue; }
+      .s { border-left: 3px groove red; }
+      .n { border-left: 3px groove black; }
+      button { display: none !important; }
+      #scoreBadge { display: none !important; }
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/@sanskrit-coders/sanscript@1.1.0/sanscript.min.js"></script>
+  <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
 </head>
+
 <body>
-    <h1>शब्दावली</h1>
-    <div class="grid" id="dictionaryGrid"></div>
-    <script>
-        var wpp = 15; //words per page
-        var tlang = [];
-        tlang[1] = "itrans";
-        tlang['gu'] = "gujarati";
-        tlang['ka'] = "kannada";
-        tlang['be'] = "bengali";
-        tlang['ml'] = "malayalam";
-        tlang['te'] = "telugu";
-        tlang['ta'] = "tamil";
-        tlang['ia'] = "iast";
+  <h1>शब्दावली</h1>
 
-        document.addEventListener('DOMContentLoaded', function () {
-            var lnk = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6CFR_0gDsZl-lmwLFWmtdXMXYGVEHGJ8fvBu2_5wvbEl9L-4Yr0ugI0TFTTdvtLlMTRmLnCIJ5FBF/pub?gid=0&single=true&output=csv";
-            Papa.parse(lnk, {
-                download: true,
-                header: true,
-                complete: populateWlist
-            })
-        })
-        function populateWlist(fildat) {
-            fullist = fildat.data;
-            var secs = 0;
-            var numberOfWrongTries = 0;
-            matchesdone = 0;
-            var timer;
-            triesElement = document.getElementById("nowt");
-            const urlParams = new URLSearchParams(window.location.search);
-            var set = urlParams.get('s');
-            if (!set || isNaN(set) || (set >= fullist.length))
-                set = 0;
-            var t = urlParams.get('t'); // transliterate mode - 1 is true
-            if (!t)
-{
-                t = 0;
-}
-if (!tlang[t])
-document.getElementsByTagName("h1")[0].innerHTML += " " + Sanscript.t(`${set}`, 'itrans', 'devanagari');
-else
-document.getElementsByTagName("h1")[0].innerHTML += " " + Sanscript.t(`${set}`, 'itrans', tlang[t]);
-var imgm = urlParams.get('m');
-            if (!imgm)
-                imgm = "b";
-            var image = [];
-            var words = [];
-            var uc=[];
-            var aud = [];
-var linga=[];
-            for (i = 0; i < wpp; i++) {
-                words.push(fullist[(set * wpp) + i].padam);
-		uc.push(fullist[(set * wpp) + i].unicode);
-                image.push(fullist[(set * wpp) + i]["Imaage link"])
-                aud.push(fullist[(set * wpp) + i]["alnk"])
-linga.push(fullist[(set * wpp) + i]["linga"])
-            }
-            while (!words[words.length - 1]) {
-                words.pop();
-            }
-            while (!image[image.length - 1]) {
-                image.pop();
-            }
-            const grid = document.getElementById("dictionaryGrid");
+  <div class="grid" id="dictionaryGrid"></div>
 
-            // Create card for each word
-            async function createDictionary() {
-                for (const [i, word] of words.entries()) {
-var txtimg='';
-                    var alnk = aud[`${i}`];
-                    var lnk = uc[`${i}`];
-                    // if (lnk.length == 4 || lnk.length == 5)
-			//lnk= String.fromCodePoint(parseInt(lnk, 16));
-                        // lnk = "https://openmoji.org/data/color/svg/" + lnk + ".svg";
-                    var wrdtxt = `${word}`
-                    if (t != 0 && tlang[t])
-                        wrdtxt += " - " + Sanscript.t(`${word}`, 'devanagari', tlang[t]);
+  <div id="scoreBadge">Score: <span id="scoreValue">0</span></div>
+  <button id="submitScoreBtn">Submit Score (Day 1)</button>
 
-                    const card = document.createElement("div");
+  <script>
+    // ======= Day1 Game Logic =======
+    const wpp = 15; // words per page
+    const tlang = [];
+    tlang[1] = "itrans";
+    tlang["gu"] = "gujarati";
+    tlang["ka"] = "kannada";
+    tlang["be"] = "bengali";
+    tlang["ml"] = "malayalam";
+    tlang["te"] = "telugu";
+    tlang["ta"] = "tamil";
+    tlang["ia"] = "iast";
 
-                    card.className = "card";
-              card.classList.add(linga[`${i}`]);
-if (lnk && lnk.length <12)
-{
-  if (imgm=="u")
-    txtimg ='<span style="font-size: 120px; line-height:150px;">'+ String.fromCodePoint(parseInt(lnk, 16))+'</span>'
-  else if (imgm == "e")
-    txtimg = '<img style="max-width: 150px;"  src="https://openmoji.org/data/color/svg/'+lnk+'.svg">'
-else
-  txtimg = '<img style="max-width: 150px;"  src="'+image[`${i}`]+'">'
-}
-else
-  txtimg = '<img style="max-width: 150px;"  src="'+image[`${i}`]+'">'
-card.innerHTML = `<center><div class="word">${wrdtxt}</div>
-<div class="definition">${txtimg}</div><audio id=a${i} src=${alnk} ></audio>
-<button id=${i} onclick="for (i=0;i<wpp;i++) musicelements[i].pause();musicelements[this.id].play()";>
-    <!-- Use a speaker icon here (e.g., a Font Awesome icon or an image) -->
-    🔊
-</button>
-        </center>`;
-                    grid.appendChild(card);
-                }
-            }
-            createDictionary();
-            musicelements = document.getElementsByTagName("audio");
+    let fullist = [];
+    let musicelements = [];
+    const played = new Set();  // unique audio clicks = score
+    let submitted = false;
+
+    function updateScoreBadge() {
+      document.getElementById("scoreValue").textContent = String(played.size);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const lnk =
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6CFR_0gDsZl-lmwLFWmtdXMXYGVEHGJ8fvBu2_5wvbEl9L-4Yr0ugI0TFTTdvtLlMTRmLnCIJ5FBF/pub?gid=0&single=true&output=csv";
+
+      Papa.parse(lnk, {
+        download: true,
+        header: true,
+        complete: populateWlist
+      });
+    });
+
+    function populateWlist(fildat) {
+      fullist = fildat.data || [];
+
+      const urlParams = new URLSearchParams(window.location.search);
+      let set = urlParams.get("s");
+      if (!set || isNaN(set) || (set >= fullist.length)) set = 0;
+
+      let t = urlParams.get("t");
+      if (!t) t = 0;
+
+      if (!tlang[t]) {
+        document.getElementsByTagName("h1")[0].innerHTML +=
+          " " + Sanscript.t(`${set}`, "itrans", "devanagari");
+      } else {
+        document.getElementsByTagName("h1")[0].innerHTML +=
+          " " + Sanscript.t(`${set}`, "itrans", tlang[t]);
+      }
+
+      let imgm = urlParams.get("m");
+      if (!imgm) imgm = "b";
+
+      const image = [];
+      const words = [];
+      const uc = [];
+      const aud = [];
+      const linga = [];
+
+      for (let i = 0; i < wpp; i++) {
+        const row = fullist[(set * wpp) + i];
+        if (!row) continue;
+
+        words.push(row.padam);
+        uc.push(row.unicode);
+        image.push(row["Imaage link"]);
+        aud.push(row["alnk"]);
+        linga.push(row["linga"]);
+      }
+
+      while (words.length && !words[words.length - 1]) words.pop();
+      while (image.length && !image[image.length - 1]) image.pop();
+
+      const grid = document.getElementById("dictionaryGrid");
+      grid.innerHTML = "";
+
+      for (const [i, word] of words.entries()) {
+        let txtimg = "";
+        const alnk = aud[i];
+        const lnk = uc[i];
+
+        let wrdtxt = `${word}`;
+        if (t != 0 && tlang[t]) wrdtxt += " - " + Sanscript.t(`${word}`, "devanagari", tlang[t]);
+
+        const card = document.createElement("div");
+        card.className = "card";
+        if (linga[i]) card.classList.add(linga[i]);
+
+        if (lnk && String(lnk).length < 12) {
+          if (imgm === "u") {
+            txtimg = '<span style="font-size:120px; line-height:150px;">' +
+              String.fromCodePoint(parseInt(lnk, 16)) + "</span>";
+          } else if (imgm === "e") {
+            txtimg = '<img style="max-width:150px;" src="https://openmoji.org/data/color/svg/' + lnk + '.svg">';
+          } else {
+            txtimg = '<img style="max-width:150px;" src="' + image[i] + '">';
+          }
+        } else {
+          txtimg = '<img style="max-width:150px;" src="' + image[i] + '">';
         }
-    </script>
+
+        card.innerHTML = `
+          <div class="word">${wrdtxt}</div>
+          <div class="definition">${txtimg}</div>
+          <audio id="a${i}" src="${alnk || ""}"></audio>
+          <button class="playBtn" data-idx="${i}">🔊</button>
+        `;
+
+        grid.appendChild(card);
+      }
+
+      musicelements = document.getElementsByTagName("audio");
+
+      // Hook play buttons
+      document.querySelectorAll(".playBtn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const idx = btn.getAttribute("data-idx");
+
+          for (let i = 0; i < musicelements.length; i++) {
+            try { musicelements[i].pause(); } catch(e) {}
+          }
+
+          const audio = document.getElementById("a" + idx);
+          if (audio) {
+            try { audio.currentTime = 0; audio.play(); } catch(e) {}
+          }
+
+          played.add(String(idx));
+          updateScoreBadge();
+        });
+      });
+
+      updateScoreBadge();
+    }
+  </script>
+
+  <!-- ======= Firebase + Name Prompt + Submit (asks name EVERY launch) ======= -->
+  <script type="module">
+    import "./js/bp26-score.js";
+
+    // This will prompt for name EVERY time this page is opened/refreshed
+    window.bp26Init({ game: "lrn", day: 1 });
+
+    const submitBtn = document.getElementById("submitScoreBtn");
+
+    submitBtn.addEventListener("click", async () => {
+      if (submitted) return;
+
+      const score = played.size; // scoring rule for lrn.htm
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Submitting...";
+
+      await window.reportScore(score);
+
+      submitted = true;
+      submitBtn.textContent = `Submitted ✅ (Score: ${score})`;
+    });
+  </script>
 </body>
 </html>

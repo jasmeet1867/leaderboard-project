@@ -1,46 +1,64 @@
-<!DOCTYPE HTML>
-<html lang="en-US">
+<!DOCTYPE html>
+<html lang="en" manifest="cache.manifest">
 <head>
-  <meta name="viewport" content="width=device-width">
-  <meta charset="UTF-8">
-  <title>स्वराः-paint</title>
-  <link rel="stylesheet" type="text/css" href="letterpaint.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>स्वरः-paint</title>
+  <link rel="stylesheet" href="letterpaint.css">
 </head>
-<body>
-  <div id="container" class="container">
 
-    <div id="chars" class="gamedata">अआइईउऊऋॠएऐओऔ</div>
+<body>
+  <div class="container intro" id="container">
+
+    <p class="toppanel">स्वरः-paint</p>
+
+    <!-- letters to pick from (KEEP YOUR ORIGINAL ONES HERE) -->
+    <div class="gamedata" id="chars">
+      अआइईउऊऋएऐओऔअंअःकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह
+    </div>
 
     <canvas></canvas>
 
-    <h1 class="toppanel">स्वराः-paint</h1>
-
-    <div id="intro" class="cover">
-      <p>Paint over the letter you see on the screen. Can you write it without going outside of it?</p>
-      <button class="actionbutton">➜</button>
+    <!-- Intro -->
+    <div class="cover" id="intro">
+      <p>
+        Paint over the letter you see on the screen. Can you write it without going outside of it?
+        <button class="actionbutton" type="button">➜</button>
+      </p>
     </div>
 
-    <button id="sound" class="navbutton">♬</button>
-
-    <div id="win" class="cover check">
-      <p>उत्तमम् !  (uttamam) Good job!</p> 
-      <button class="actionbutton">➜</button>
+    <!-- Win -->
+    <div class="cover check" id="win">
+      <p>
+        Great! +10 points
+        <button class="actionbutton" type="button">➜</button>
+      </p>
     </div>
 
-    <div id="error" class="cover">
-      <p>Try पुनः (punaH = again) .. You painted outside the letter!</p> 
-      <button class="actionbutton">➜</button>
+    <!-- Error -->
+    <div class="cover" id="error">
+      <p>
+        Oops! You went outside.
+        <button class="actionbutton" type="button">➜</button>
+      </p>
     </div>
 
+    <!-- Buttons -->
+    <button class="navbutton" id="sound" type="button">♫</button>
+    <button class="actionbutton undo" id="reload" type="button">X</button>
 
-    <button class="actionbutton undo" id="reload">X</button>
+    <!-- Sounds -->
+    <audio id="winsound" preload="auto">
+      <source src="win.ogg" type="audio/ogg">
+    </audio>
+    <audio id="errorsound" preload="auto"></audio>
+
   </div>
 
-  <!-- http://freesound.org/people/NenadSimic/sounds/150879/ -->
-  <audio src="win.ogg" id="winsound"></audio>
-  <!-- http://freesound.org/people/Autistic%20Lucario/sounds/142608/ -->
-  <audio src="error.ogg" id="errorsound"></audio>
+  <!-- ✅ NEW: Firestore + ask player name (does NOT change UI) -->
+  <script type="module" src="score-writer.js"></script>
 
+  <!-- Your original game logic (with tiny score call added) -->
   <script src="letterpaint.js"></script>
 </body>
 </html>

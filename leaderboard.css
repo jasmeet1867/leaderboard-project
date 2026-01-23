@@ -17,20 +17,44 @@ body { font-family: Arial, sans-serif; background: #f4f6f8; color: #222; }
   gap: 12px;
 }
 
+/* ✅ Base card */
 .podium .box{
-  background:#fff; border-radius:16px; padding:14px;
+  background:#fff;
+  border-radius:16px;
+  padding:14px;
   box-shadow: 0 10px 25px rgba(0,0,0,0.08);
   border: 2px solid transparent;
 }
+
+/* text styles */
 .podium .rank { font-size:14px; font-weight:800; margin-bottom:6px; }
 .podium .name { font-size:18px; font-weight:800; margin-bottom:6px; }
 .podium .score { font-size:26px; font-weight:900; }
 .podium .game { margin-top:6px; font-size:13px; color:#666; }
 
-.gold   { background:#fff8d6; border-color:#d6b200; color:#7a6300; }
-.silver { background:#f3f3f3; border-color:#a9a9a9; color:#444; }
-.bronze { background:#f3e0d2; border-color:#b87333; color:#6d3b0e; }
+/* ✅ IMPORTANT: apply colors to the BOX itself */
+.podium .box.gold{
+  background:#fff8d6;
+  border-color:#d6b200;
+  color:#7a6300;
+}
+.podium .box.silver{
+  background:#f3f3f3;
+  border-color:#a9a9a9;
+  color:#444;
+}
+.podium .box.bronze{
+  background:#f3e0d2;
+  border-color:#b87333;
+  color:#6d3b0e;
+}
 
+/* ✅ make score stand out (inherits correct color from card) */
+.podium .box .score{
+  margin-top: 4px;
+}
+
+/* card + table */
 .card{
   background:#fff; border-radius:16px; padding:14px;
   box-shadow: 0 10px 25px rgba(0,0,0,0.08);
@@ -40,6 +64,7 @@ body { font-family: Arial, sans-serif; background: #f4f6f8; color: #222; }
   margin-bottom: 10px;
 }
 .card-header h2{ font-size:18px; }
+
 #refreshBtn{
   border:2px solid #c48b2c; background:#fff; color:#c48b2c;
   padding:8px 12px; border-radius:12px; font-weight:800; cursor:pointer;
@@ -55,9 +80,30 @@ tbody td{
   padding:10px; border-bottom:1px solid #f0f0f0; font-size:14px;
 }
 .muted{ color:#777; text-align:center; padding:20px; }
+
 .badge{
-  display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px;
+  display:inline-block; padding:4px 10px; border-radius:999px;
+  font-weight:800; font-size:12px;
 }
 .badge.g{ background:#fff8d6; color:#7a6300; }
 .badge.s{ background:#f3f3f3; color:#444; }
 .badge.b{ background:#f3e0d2; color:#6d3b0e; }
+
+
+/* 🏆 Podium height effect */
+.podium .box.gold{
+  transform: translateY(-20px);
+}
+
+.podium .box.silver{
+  transform: translateY(-8px);
+}
+
+.podium .box.bronze{
+  transform: translateY(-4px);
+}
+
+/* Lift podium: 1st highest, then 2nd/3rd slightly */
+.podium .box.gold { transform: translateY(-16px); }
+.podium .box.silver { transform: translateY(-10px); }
+.podium .box.bronze { transform: translateY(-6px); }

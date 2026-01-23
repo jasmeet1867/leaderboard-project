@@ -259,8 +259,9 @@ Leaderboard Styles
 
 .leaderboard-container {
   position: fixed;
-  top: 20px;
+  top: auto;         
   right: 25px;
+  bottom: 20px;       
   z-index: 9999;
   font-family: Arial, sans-serif;
 }

@@ -1,4 +1,4 @@
-(function(){
+(function () {
 
   /* Get container elements */
   var container = document.querySelector('#container');
@@ -6,7 +6,6 @@
 
   /* Get buttons */
   var startbutton = document.querySelector('#intro button');
-  var installbutton = document.querySelector('#install');
   var winbutton = document.querySelector('#win button');
   var reloadbutton = document.querySelector('#reload');
   var soundbutton = document.querySelector('#sound');
@@ -18,14 +17,14 @@
 
   /* Prepare canvas */
   var c = document.querySelector('canvas');
-  var cx = c.getContext('2d');
+  var cx = c.getContext('2d', { willReadFrequently: true }); // Performance optimization
   var letter = null;
   var fontsize = 300;
   var paintcolour = [240, 240, 240];
   var textcolour = [255, 30, 20];
   var xoffset = 0;
   var yoffset = 0;
-  var linewidth = 20;
+  var linewidth = 40; // Default, will be updated in init
   var pixels = 0;
   var letterpixels = 0;
 
@@ -40,11 +39,17 @@
   var sound = true;
   var currentstate;
 
+  /* prevent double scoring per win */
+  var winSubmitted = false;
+
   function init() {
     xoffset = container.offsetLeft;
     yoffset = container.offsetTop;
+    
+    // Adjusted sizes for better gameplay
     fontsize = container.offsetHeight / 1.5;
-    linewidth = container.offsetHeight / 19;
+    linewidth = container.offsetHeight / 10; // Thicker brush for easier painting
+    
     paintletter();
     setstate('intro');
   }
@@ -61,7 +66,7 @@
 
   function showerror() {
     setstate('error');
-    if (sound) {
+    if (sound && errorsound && errorsound.play) {
       errorsound.play();
     }
     if (navigator.vibrate) {
@@ -69,38 +74,45 @@
     }
   }
 
-
-
   function setstate(newstate) {
     state = newstate;
     container.className = newstate;
-    currentsate = state;
+    currentstate = state; 
   }
-  function moreneeded() {
-    setstate('play');
-    mousedown = false;
-  }
+
   function retry(ev) {
     mousedown = false;
     oldx = 0;
     oldy = 0;
     paintletter(letter);
   }
+
   function winner() {
     paintletter();
   }
+
   function start() {
+    if (window.ensurePlayerName) {
+      window.ensurePlayerName(true); 
+    }
     paintletter(letter);
   }
+
   function cancel() {
     paintletter();
   }
+
   function paintletter(retryletter) {
-    var chars = charscontainer.innerHTML.split('');
-    letter = retryletter ||
-             chars[parseInt(Math.random() * chars.length,10)];
+    var chars = (charscontainer.textContent || "").replace(/\s+/g, '').split('');
+    if (!chars.length) chars = ['अ'];
+
+    letter = retryletter || chars[parseInt(Math.random() * chars.length, 10)];
+
     c.width = container.offsetWidth;
     c.height = container.offsetHeight;
+
+    cx.clearRect(0, 0, c.width, c.height);
+
     cx.font = 'bold ' + fontsize + 'px Open Sans';
     cx.fillStyle = 'rgb(' + textcolour.join(',') + ')';
     cx.strokeStyle = 'rgb(' + paintcolour.join(',') + ')';
@@ -112,32 +124,46 @@
     cx.textBaseline = 'baseline';
     cx.lineWidth = linewidth;
     cx.lineCap = 'round';
+    cx.lineJoin = 'round';
+
     cx.fillText(
       letter,
       (c.width - cx.measureText(letter).width) / 2,
       (c.height / 1.3)
     );
+
+    // Capture the initial letter state
     pixels = cx.getImageData(0, 0, c.width, c.height);
+
+    // Count how many pixels the red letter occupies
     letterpixels = getpixelamount(
       textcolour[0],
       textcolour[1],
-      textcolour[2]
+      textcolour[2],
+      50 // High tolerance for anti-aliasing
     );
+
     cx.shadowOffsetX = 0;
     cx.shadowOffsetY = 0;
     cx.shadowBlur = 0;
-    cx.shadowColor = '#333';
+
+    winSubmitted = false;
     setstate('play');
   }
 
-  function getpixelamount(r, g, b) {
-    var pixels = cx.getImageData(0, 0, c.width, c.height);
-    var all = pixels.data.length;
+  function getpixelamount(r, g, b, tol) {
+    var px = cx.getImageData(0, 0, c.width, c.height);
+    var all = px.data.length;
     var amount = 0;
-    for (i = 0; i < all; i += 4) {
-      if (pixels.data[i] === r &&
-          pixels.data[i+1] === g &&
-          pixels.data[i+2] === b) {
+    tol = (typeof tol === "number") ? tol : 0;
+
+    for (var i = 0; i < all; i += 4) {
+      if (
+        Math.abs(px.data[i] - r) <= tol &&
+        Math.abs(px.data[i + 1] - g) <= tol &&
+        Math.abs(px.data[i + 2] - b) <= tol &&
+        px.data[i + 3] > 50 // Check alpha
+      ) {
         amount++;
       }
     }
@@ -145,10 +171,15 @@
   }
 
   function paint(x, y) {
+    if (state !== 'play') return;
+
     var rx = x - xoffset;
     var ry = y - yoffset;
-    var colour = pixelcolour(x, y);
-    if( colour.r === 0 && colour.g === 0 && colour.b === 0) {
+
+    var colour = pixelcolour(rx, ry);
+
+    // Check if we hit the background (black/empty)
+    if (colour.a === 0 || (colour.r === 0 && colour.g === 0 && colour.b === 0)) {
       showerror();
     } else {
       cx.beginPath();
@@ -164,33 +195,51 @@
   }
 
   function pixelcolour(x, y) {
+    x = Math.floor(x);
+    y = Math.floor(y);
+
+    if (!pixels || !pixels.data) return { r: 0, g: 0, b: 0, a: 0 };
+    if (x < 0 || y < 0 || x >= pixels.width || y >= pixels.height) {
+      return { r: 0, g: 0, b: 0, a: 0 };
+    }
+
     var index = ((y * (pixels.width * 4)) + (x * 4));
     return {
-      r:pixels.data[index],
-      g:pixels.data[index + 1],
-      b:pixels.data[index + 2],
-      a:pixels.data[index + 3]
+      r: pixels.data[index],
+      g: pixels.data[index + 1],
+      b: pixels.data[index + 2],
+      a: pixels.data[index + 3]
     };
   }
 
   function pixelthreshold() {
-    if (state !== 'error') {
-      if (getpixelamount(
+    if (state === 'play') {
+      var painted = getpixelamount(
         paintcolour[0],
         paintcolour[1],
-        paintcolour[2]
-      ) / letterpixels > 0.35) {
-       setstate('win');
-       if (sound) {
-         winsound.play();
-       }
+        paintcolour[2],
+        100 // High tolerance to count light-gray/white pixels
+      );
+
+      // Trigger win if 20% of the letter area is covered
+      if (letterpixels > 0 && (painted / letterpixels) > 0.20) {
+        setstate('win');
+
+        if (sound && winsound && winsound.play) {
+          winsound.play();
+        }
+
+        if (!winSubmitted) {
+          winSubmitted = true;
+          if (window.awardPoints) {
+            window.awardPoints(10).catch(console.error);
+          }
+        }
       }
     }
   }
 
-
   /* Mouse event listeners */
-
   function onmouseup(ev) {
     ev.preventDefault();
     oldx = 0;
@@ -206,14 +255,16 @@
     ev.preventDefault();
     if (mousedown) {
       paint(ev.clientX, ev.clientY);
-      ev.preventDefault();
     }
   }
 
   /* Touch event listeners */
-
   function ontouchstart(ev) {
     touched = true;
+    var t = ev.changedTouches[0];
+    // Start the point so it doesn't jump
+    oldx = t.pageX - xoffset;
+    oldy = t.pageY - yoffset;
   }
   function ontouchend(ev) {
     touched = false;
@@ -223,24 +274,19 @@
   }
   function ontouchmove(ev) {
     if (touched) {
-      paint(
-        ev.changedTouches[0].pageX,
-        ev.changedTouches[0].pageY
-      );
+      paint(ev.changedTouches[0].pageX, ev.changedTouches[0].pageY);
       ev.preventDefault();
     }
   }
 
   /* Button event handlers */
-
-  errorbutton.addEventListener('click', retry, false);
-  reloadbutton.addEventListener('click', cancel, false);
-  soundbutton.addEventListener('click', togglesound, false);
-  winbutton.addEventListener('click', winner, false);
-  startbutton.addEventListener('click', start, false);
+  if (errorbutton) errorbutton.addEventListener('click', retry, false);
+  if (reloadbutton) reloadbutton.addEventListener('click', cancel, false);
+  if (soundbutton) soundbutton.addEventListener('click', togglesound, false);
+  if (winbutton) winbutton.addEventListener('click', winner, false);
+  if (startbutton) startbutton.addEventListener('click', start, false);
 
   /* Canvas event handlers */
-
   c.addEventListener('mouseup', onmouseup, false);
   c.addEventListener('mousedown', onmousedown, false);
   c.addEventListener('mousemove', onmousemove, false);
@@ -248,17 +294,7 @@
   c.addEventListener('touchend', ontouchend, false);
   c.addEventListener('touchmove', ontouchmove, false);
 
-  window.addEventListener('load',init, false);
-  window.addEventListener('resize',init, false);
-
-  /* Cache update ready? Reload the page! */
-  var cache = window.applicationCache;
-  function refresh() {
-    if (cache.status === cache.UPDATEREADY) {
-     cache.swapCache();
-     window.location.reload();
-    }
-  }
-  cache.addEventListener('updateready', refresh, false);
+  window.addEventListener('load', init, false);
+  window.addEventListener('resize', init, false);
 
 })();

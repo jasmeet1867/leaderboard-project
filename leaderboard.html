@@ -4,49 +4,76 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Leaderboard</title>
-
   <link rel="stylesheet" href="leaderboard.css" />
 </head>
-<body>
 
+<body>
   <div class="topbar">
     <a class="back" href="index24.html">← Back</a>
-    <h1>Leaderboard</h1>
-  </div>
 
-  <div class="wrap">
+    <div>
+      <h1 style="margin:0;">Leaderboard</h1>
 
-    <!-- Podium (your JS fills #podium) -->
-    <div class="podium" id="podium"></div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+        <!-- IMPORTANT: values must match Firestore gameId exactly -->
+        <select id="gameSelect" style="padding:8px 10px; border-radius:10px; border:1px solid #eee;">
+          <optgroup label="General">
+            <option value="aggregate">General (All Games)</option>
+          </optgroup>
 
-    <!-- Table card -->
-    <div class="card">
-      <div class="card-header">
-        <h2>Top Players</h2>
-        <button id="refreshBtn" type="button">Refresh</button>
-      </div>
+          <optgroup label="Scoring Games">
+            <option value="002-zpk">Game 002</option>
+            <option value="005-dy">Game 005</option>
+            <option value="014-st">Game 014</option>
+            <option value="015-2048">Game 015 (2048)</option>
+            <option value="022-p">Game 022-p</option>
+            <option value="043-trs">Game 043-trs</option>
+            <option value="044-gp">Game 044-gp</option>
+            <option value="048-fs">Game 048-fs</option>
+          </optgroup>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:80px;">Rank</th>
-              <th>Player</th>
-              <th style="width:140px;">Score</th>
-              <th style="width:140px;">Scope</th>
-              <th style="width:220px;">Updated</th>
-            </tr>
-          </thead>
-          <tbody id="rows">
-            <tr><td colspan="5" class="muted">Loading...</td></tr>
-          </tbody>
-        </table>
+          <optgroup label="BP26 Contest">
+            <option value="bp26-all">BP26 (All 5 Days)</option>
+            <option value="bp26-g1">BP26 Day 1</option>
+            <option value="bp26-g2">BP26 Day 2</option>
+            <option value="bp26-g3">BP26 Day 3</option>
+            <option value="bp26-g4">BP26 Day 4</option>
+            <option value="bp26-g5">BP26 Day 5</option>
+          </optgroup>
+        </select>
+
+        <select id="timeFilter" style="padding:8px 10px; border-radius:10px; border:1px solid #eee;">
+          <option value="all">All Time</option>
+          <option value="year">This Year</option>
+          <option value="month">This Month</option>
+          <option value="week">This Week</option>
+        </select>
       </div>
     </div>
 
+    <button id="refreshBtn" type="button">Refresh</button>
   </div>
 
-  <!-- KEEP your same leaderboard.js -->
+  <div class="wrap">
+    <div class="podium" id="podium"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Top Players</h2>
+
+        <div style="display:flex; justify-content:center; gap:10px; align-items:center;">
+          <button id="prevBtn" type="button">Previous</button>
+          <div style="font-weight:800;">Page <span id="pageNum">1</span></div>
+          <button id="nextBtn" type="button">Next</button>
+        </div>
+      </div>
+
+      <div id="leaderboard">
+        <div class="muted">Loading...</div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="leaderboard.js"></script>
 </body>
 </html>

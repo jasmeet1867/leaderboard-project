@@ -59,30 +59,30 @@
     <!-- your existing portal JS -->
     <script src="app.js"></script>
 
-    <!-- ✅ inject Scoring Games button into SAME row as Telegram -->
+    <!-- ✅ inject Scoring + Contest buttons -->
     <script>
       window.addEventListener("DOMContentLoaded", () => {
-        // wait a tick so app.js can finish building buttons
         setTimeout(() => {
           const btnContainer = document.querySelector(".btn-container");
           if (!btnContainer) return;
 
-          // avoid duplicates if page reloads
-          if (btnContainer.querySelector('[data-id="scoring"]')) return;
+          function addTab(id, text, href) {
+            if (btnContainer.querySelector(`[data-id="${id}"]`)) return;
+            const a = document.createElement("a");
+            a.className = "filter-btn";
+            a.setAttribute("data-id", id);
+            a.href = href;
+            a.textContent = text;
+            btnContainer.appendChild(a);
+          }
 
-          const a = document.createElement("a");
-          a.className = "filter-btn";
-          a.setAttribute("data-id", "scoring");
-          a.href = "scoring.html"; 
-          a.textContent = "🎯 Scoring Games";
-
-          // put it at the end (right beside Telegram)
-          btnContainer.appendChild(a);
+          addTab("scoring", "🎯 Scoring Games", "scoring.html");
+          addTab("contest", "🏆 Contest ", "contest.html");
         }, 0);
       });
     </script>
 
-    <!-- load Aggregate Top-3 from Firestore -->
+    <!-- Firebase Top 3 loader -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
       import {
