@@ -1,127 +1,144 @@
+// js/bp26-score.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getFirestore,
-  collection,
-  addDoc,
   doc,
   getDoc,
   setDoc,
   updateDoc,
-  increment
+  increment,
+  serverTimestamp,
+  collection,
+  addDoc
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA5-cHjL5iL8Arjqv2Pt2WecT8RTLw3Weg",
-  authDomain: "zatam-leaderboard.firebaseapp.com",
-  projectId: "zatam-leaderboard",
-  storageBucket: "zatam-leaderboard.firebasestorage.app",
-  messagingSenderId: "1053027312775",
-  appId: "1:1053027312775:web:43325a831ab077d017c422",
-  measurementId: "G-KP78X2DN6L"
+  apiKey: "AIzaSyAwqOOawElTcsBIAmJQIkZYs-W-h8kJx7A",
+  authDomain: "temporary-db-e9ace.firebaseapp.com",
+  databaseURL: "https://temporary-db-e9ace-default-rtdb.firebaseio.com",
+  projectId: "temporary-db-e9ace",
+  storageBucket: "temporary-db-e9ace.firebasestorage.app",
+  messagingSenderId: "810939107125",
+  appId: "1:810939107125:web:25edc649d354c1ca0bee7c"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-let BP26_GAME = "unknown";
-let BP26_DAY = 1;
+console.log("✅ Firebase connected to projectId:", app.options.projectId);
+
 let CURRENT_USER = "";
+let BP26_GAME = "bp26-Game1"; // default
 
-// Ask EVERY time a game starts
 function askNameEveryLaunch() {
-  let username = "";
-  while (!username) {
-    const name = prompt("Enter your name:");
-    if (name === null) continue;
-    username = (name || "").trim();
+  let name = "";
+  while (!name) {
+    name = prompt("Enter your name for the leaderboard:");
+    if (name === null) name = "";
+    name = name.trim();
   }
-  CURRENT_USER = username;
-  return username;
+  CURRENT_USER = name;
+  return name;
 }
 
-// Safe doc id
-function docIdFromName(name) {
-  return name.trim().toLowerCase().replace(/\s+/g, "_");
+function safeId(name) {
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "") || "guest"
+  );
 }
 
-// Call this at game load (you already do this)
-window.bp26Init = function ({ game, day } = {}) {
+// Create parent docs so they show in Firestore left panel (zat-am collection)
+async function ensureParentsUnderZatAm() {
+  await Promise.all([
+    setDoc(doc(db, "zat-am", "Global"), { label: "Global", updatedAt: serverTimestamp() }, { merge: true }),
+    setDoc(doc(db, "zat-am", "bp26"), { label: "bp26", updatedAt: serverTimestamp() }, { merge: true }),
+    setDoc(doc(db, "zat-am", BP26_GAME), { label: BP26_GAME, updatedAt: serverTimestamp() }, { merge: true })
+  ]);
+}
+
+export function bp26Init({ game } = {}) {
+  // ask name EVERY launch (your requirement)
   askNameEveryLaunch();
 
   if (game) BP26_GAME = String(game);
-  if (day) BP26_DAY = Number(day);
 
-  // Optional override by URL ?day=2
-  const params = new URLSearchParams(location.search);
-  if (params.has("day")) BP26_DAY = Number(params.get("day"));
+  console.log("✅ BP26 INIT:", { user: CURRENT_USER, game: BP26_GAME });
+}
 
-  console.log("[BP26 INIT]", { user: CURRENT_USER, game: BP26_GAME, day: BP26_DAY });
-};
+// Upsert (and increment) player doc
+async function upsertIncrement(ref, name, delta) {
+  const snap = await getDoc(ref);
 
-// Call this when game ends
-window.reportScore = async function (score) {
+  if (snap.exists()) {
+    await updateDoc(ref, {
+      name,
+      playerName: name,
+      score: increment(delta),      // leaderboard uses score
+      lastScore: delta,
+      updatedAt: serverTimestamp()  // leaderboard reads this for lastPlayed
+    });
+  } else {
+    await setDoc(ref, {
+      name,
+      playerName: name,
+      score: delta,                 // can be 0 ✅
+      lastScore: delta,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  }
+}
+
+// Add a history record (like your screenshot: score, timestamp, username)
+async function addHistory(gameId, name, score) {
+  const historyCol = collection(db, "zat-am", gameId, "gameHistory");
+  await addDoc(historyCol, {
+    username: name,
+    score: Number(score),
+    timestamp: Date.now(),          // matches your screenshot style
+    createdAt: serverTimestamp()
+  });
+}
+
+export async function reportScore(score) {
   if (!CURRENT_USER) askNameEveryLaunch();
 
   const s = Number(score);
-  if (!Number.isFinite(s)) {
-    alert("Score must be a number.");
-    return;
-  }
+  if (!Number.isFinite(s)) throw new Error("Score must be a number."); // 0 allowed ✅
 
-  const nowMs = Date.now();
-  const playerDocId = docIdFromName(CURRENT_USER);
-  const dayField = `day${BP26_DAY}Score`; // day1Score..day5Score
+  const id = safeId(CURRENT_USER);
+  const name = CURRENT_USER;
 
-  try {
-    // 1) Always write raw submission (even 0)
-    await addDoc(collection(db, "scores_game"), {
-      name: playerDocId,
-      playerName: CURRENT_USER,
-      game: BP26_GAME,
-      day: BP26_DAY,
-      score: s,
-      createdAt: nowMs
-    });
+  await ensureParentsUnderZatAm();
 
-    // 2) Aggregate doc
-    const aggRef = doc(db, "scores_aggregate", playerDocId);
-    const snap = await getDoc(aggRef);
+  // ✅ refs
+  const gamePlayerRef = doc(db, "zat-am", BP26_GAME, "players", id);
+  const bp26PlayerRef = doc(db, "zat-am", "bp26", "players", id);
+  const globPlayerRef = doc(db, "zat-am", "Global", "players", id);
 
-    if (snap.exists()) {
-      // IMPORTANT: force day field to exist even if s == 0
-      const patch = {
-        playerName: CURRENT_USER,
-        updatedAt: nowMs
-      };
+  // ✅ write players (so leaderboard shows it)
+  await Promise.all([
+    upsertIncrement(gamePlayerRef, name, s),
+    upsertIncrement(bp26PlayerRef, name, s),
+    upsertIncrement(globPlayerRef, name, s)
+  ]);
 
-      // If field exists or not, increment will work.
-      // But to ensure the field exists even for 0, we also set it if missing.
-      const current = snap.data() || {};
-      if (current[dayField] === undefined) {
-        // ensure it exists, then increment (0 still ok)
-        patch[dayField] = 0;
-      }
+  // ✅ write history (so format matches Game1)
+  await Promise.all([
+    addHistory(BP26_GAME, name, s),
+    addHistory("Global", name, s)
+    // (optional) if you also want bp26 history:
+    // addHistory("bp26", name, s),
+  ]);
 
-      // increment totals (0 is fine)
-      patch.totalScore = increment(s);
-      patch[dayField] = increment(s);
+  console.log("🔥 SCORE SAVED:", { game: BP26_GAME, user: id, score: s });
+  return { ok: true };
+}
 
-      await updateDoc(aggRef, patch);
-
-    } else {
-      // New doc: write fields explicitly (0 included)
-      await setDoc(aggRef, {
-        playerName: CURRENT_USER,
-        totalScore: s,
-        [dayField]: s,
-        updatedAt: nowMs
-      });
-    }
-
-    console.log("✅ Saved", { playerDocId, playerName: CURRENT_USER, game: BP26_GAME, day: BP26_DAY, score: s });
-
-  } catch (err) {
-    console.error("❌ Firebase error:", err);
-    alert("Firebase error. Open Console (F12) and send me the red error.");
-  }
-};
+// expose for non-module usage too
+window.bp26Init = bp26Init;
+window.reportScore = reportScore;

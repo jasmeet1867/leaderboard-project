@@ -16,7 +16,7 @@
   </head>
 
   <body>
-    <!-- Leaderboard (Aggregate Top 3 preview) -->
+    <!-- Leaderboard (Top 3 preview) -->
     <div class="leaderboard-container">
       <a class="leaderboard-btn" href="leaderboard.html">🏆 Leaderboard</a>
 
@@ -77,62 +77,12 @@
           }
 
           addTab("scoring", "🎯 Scoring Games", "scoring.html");
-          addTab("contest", "🏆 Contest ", "contest.html");
+          addTab("contest", "🏆 Contest", "contest.html");
         }, 0);
       });
     </script>
 
-    <!-- Firebase Top 3 loader -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-      import {
-        getFirestore,
-        collection,
-        query,
-        orderBy,
-        limit,
-        getDocs
-      } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-
-      const firebaseConfig = {
-        apiKey: "AIzaSyA5-cHjL5iL8Arjqv2Pt2WecT8RTLw3Weg",
-        authDomain: "zatam-leaderboard.firebaseapp.com",
-        projectId: "zatam-leaderboard",
-        storageBucket: "zatam-leaderboard.firebasestorage.app",
-        messagingSenderId: "1053027312775",
-        appId: "1:1053027312775:web:43325a831ab077d017c422",
-        measurementId: "G-KP78X2DN6L"
-      };
-
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
-
-      async function loadTop3() {
-        const q = query(
-          collection(db, "scores_aggregate"),
-          orderBy("totalScore", "desc"),
-          limit(3)
-        );
-
-        const snap = await getDocs(q);
-        const top = [];
-        snap.forEach((d) => top.push(d.data()));
-
-        const p1 = top[0] || { playerName: "—", totalScore: 0 };
-        const p2 = top[1] || { playerName: "—", totalScore: 0 };
-        const p3 = top[2] || { playerName: "—", totalScore: 0 };
-
-        document.getElementById("p1Name").textContent = p1.playerName || "—";
-        document.getElementById("p1Score").textContent = p1.totalScore ?? 0;
-
-        document.getElementById("p2Name").textContent = p2.playerName || "—";
-        document.getElementById("p2Score").textContent = p2.totalScore ?? 0;
-
-        document.getElementById("p3Name").textContent = p3.playerName || "—";
-        document.getElementById("p3Score").textContent = p3.totalScore ?? 0;
-      }
-
-      loadTop3();
-    </script>
+    <!-- ✅ Mini leaderboard (same data source as Global leaderboard page) -->
+    <script type="module" src="home-leaderboard.js"></script>
   </body>
 </html>

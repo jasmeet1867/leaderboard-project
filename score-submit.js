@@ -1,71 +1,76 @@
-// zat.am/score-submit.js
+// score-submit.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getFirestore,
   doc,
   setDoc,
-  increment
+  increment,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
+// ✅ YOUR NEW PROJECT: temporary-db-e9ace
 const firebaseConfig = {
-  apiKey: "AIzaSyA5-cHjL5iL8Arjqv2Pt2WecT8RTLw3Weg",
-  authDomain: "zatam-leaderboard.firebaseapp.com",
-  projectId: "zatam-leaderboard",
-  storageBucket: "zatam-leaderboard.firebasestorage.app",
-  messagingSenderId: "1053027312775",
-  appId: "1:1053027312775:web:43325a831ab077d017c422",
-  measurementId: "G-KP78X2DN6L"
+  apiKey: "AIzaSyAwqOOawElTcsBIAmJQIkZYs-W-h8kJx7A",
+  authDomain: "temporary-db-e9ace.firebaseapp.com",
+  databaseURL: "https://temporary-db-e9ace-default-rtdb.firebaseio.com",
+  projectId: "temporary-db-e9ace",
+  storageBucket: "temporary-db-e9ace.firebasestorage.app",
+  messagingSenderId: "810939107125",
+  appId: "1:810939107125:web:25edc649d354c1ca0bee7c"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-function safeId(s) {
-  return String(s || "guest")
-    .trim()
+// ✅ EXACT doc names you are using in Firestore (match spelling/spaces)
+const BP26_GAMES = new Set([
+  "Game 005",
+  "GAME 014",
+  "GAME 015",
+  "GAME 026-SP",
+  "Rock Paper Scissors"
+]);
+
+function toPlayerId(name) {
+  return (name || "guest")
     .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "_")
-    .slice(0, 40);
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9]/g, "") || "guest";
 }
 
 /**
- * submitScore(gameId, playerName, points)
- * - Adds points to aggregate + per-game
- * - Call this ONLY ONCE per game end (win).
+ * Writes score to:
+ * - zat-am/<gameDocId>/players/<playerId>
+ * - if gameDocId is one of BP26_GAMES, also writes to zat-am/bp26/players/<playerId>
  */
-export async function submitScore(gameId, playerName, points) {
-  const gid = safeId(gameId || "unknown_game");
-  const pname = (playerName || "Guest").trim() || "Guest";
-  const pid = safeId(pname);
+export async function submitScore(gameDocId, username, points = 1) {
+  const gameId = (gameDocId || "").trim();
+  const name = (username || "Guest").trim() || "Guest";
+  const pts = Number(points) || 0;
 
-  const pts = Number(points);
-  if (!Number.isFinite(pts) || pts <= 0) return;
+  if (!gameId || pts === 0) return;
 
-  // 1) Aggregate (All games)
-  const aggRef = doc(db, "scores_aggregate", pid);
-  await setDoc(
-    aggRef,
-    {
-      playerId: pid,
-      playerName: pname,
-      totalScore: increment(pts),
-      updatedAt: Date.now()
-    },
-    { merge: true }
-  );
+  const playerId = toPlayerId(name);
 
-  // 2) Per-game (One game)
-  const gameDocId = `${gid}_${pid}`;
-  const gameRef = doc(db, "scores_game", gameDocId);
-  await setDoc(
-    gameRef,
-    {
-      gameId: gid,
-      playerId: pid,
-      playerName: pname,
-      score: increment(pts),
-      updatedAt: Date.now()
-    },
-    { merge: true }
-  );
+  const perGameRef = doc(db, "zat-am", gameId, "players", playerId);
+
+  // 🔥 this one is your bp26 aggregate leaderboard
+  const bp26Ref = doc(db, "zat-am", "bp26", "players", playerId);
+
+  const payload = {
+    username: name,                 // ✅ leaderboard reads this
+    totalScore: increment(pts),     // ✅ leaderboard reads this
+    updatedAt: serverTimestamp()
+  };
+
+  // always write per-game
+  const writes = [setDoc(perGameRef, payload, { merge: true })];
+
+  // write bp26 aggregate ONLY for the 5 bp26 games
+  if (BP26_GAMES.has(gameId)) {
+    writes.push(setDoc(bp26Ref, payload, { merge: true }));
+  }
+
+  await Promise.all(writes);
 }

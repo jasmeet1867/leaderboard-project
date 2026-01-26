@@ -4,76 +4,73 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Leaderboard</title>
+
   <link rel="stylesheet" href="leaderboard.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
 </head>
 
 <body>
-  <div class="topbar">
-    <a class="back" href="index24.html">← Back</a>
-
-    <div>
-      <h1 style="margin:0;">Leaderboard</h1>
-
-      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
-        <!-- IMPORTANT: values must match Firestore gameId exactly -->
-        <select id="gameSelect" style="padding:8px 10px; border-radius:10px; border:1px solid #eee;">
-          <optgroup label="General">
-            <option value="aggregate">General (All Games)</option>
-          </optgroup>
-
-          <optgroup label="Scoring Games">
-            <option value="002-zpk">Game 002</option>
-            <option value="005-dy">Game 005</option>
-            <option value="014-st">Game 014</option>
-            <option value="015-2048">Game 015 (2048)</option>
-            <option value="022-p">Game 022-p</option>
-            <option value="043-trs">Game 043-trs</option>
-            <option value="044-gp">Game 044-gp</option>
-            <option value="048-fs">Game 048-fs</option>
-          </optgroup>
-
-          <optgroup label="BP26 Contest">
-            <option value="bp26-all">BP26 (All 5 Days)</option>
-            <option value="bp26-g1">BP26 Day 1</option>
-            <option value="bp26-g2">BP26 Day 2</option>
-            <option value="bp26-g3">BP26 Day 3</option>
-            <option value="bp26-g4">BP26 Day 4</option>
-            <option value="bp26-g5">BP26 Day 5</option>
-          </optgroup>
-        </select>
-
-        <select id="timeFilter" style="padding:8px 10px; border-radius:10px; border:1px solid #eee;">
-          <option value="all">All Time</option>
-          <option value="year">This Year</option>
-          <option value="month">This Month</option>
-          <option value="week">This Week</option>
-        </select>
-      </div>
-    </div>
-
-    <button id="refreshBtn" type="button">Refresh</button>
+  <div class="header-container">
+    <a class="back-btn" href="index24.html">← Back</a>
+    <h1>Leaderboard</h1>
   </div>
 
-  <div class="wrap">
-    <div class="podium" id="podium"></div>
+  <div class="controls">
+    <select id="gameSelect"></select>
 
-    <div class="card">
-      <div class="card-header">
-        <h2>Top Players</h2>
+    <select id="timeFilter">
+      <option value="all">All Time</option>
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+      <option value="monthly">Monthly</option>
+    </select>
+  </div>
 
-        <div style="display:flex; justify-content:center; gap:10px; align-items:center;">
-          <button id="prevBtn" type="button">Previous</button>
-          <div style="font-weight:800;">Page <span id="pageNum">1</span></div>
-          <button id="nextBtn" type="button">Next</button>
-        </div>
-      </div>
-
-      <div id="leaderboard">
-        <div class="muted">Loading...</div>
-      </div>
+  <div class="podium">
+    <div class="podium-card rank-2">
+      <div class="rank">#2</div>
+      <div class="name" id="name-2">---</div>
+      <div class="score" id="score-2">---</div>
     </div>
+
+    <div class="podium-card rank-1">
+      <div class="rank">#1</div>
+      <div class="name" id="name-1">---</div>
+      <div class="score" id="score-1">---</div>
+    </div>
+
+    <div class="podium-card rank-3">
+      <div class="rank">#3</div>
+      <div class="name" id="name-3">---</div>
+      <div class="score" id="score-3">---</div>
+    </div>
+  </div>
+
+  <div id="leaderboard"></div>
+
+  <div class="pagination">
+    <button id="prevBtn">Previous</button>
+    <span class="page-info">Page <span id="pageNum">1</span> of <span id="totalPages">1</span></span>
+    <button id="nextBtn">Next</button>
+  </div>
+
+  <div style="margin-top: 22px;">
+    <canvas id="line-graph"></canvas>
+  </div>
+
+  <div id="adminPanel" style="display:none; text-align:center;">
+    <br />
+    <span style="font-size: 14px; color: #444;">Competition Active:</span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="statusToggle" />
+      <span class="slider round"></span>
+    </label>
+
+    <button id="resetBtn" style="margin-left: 20px;">Reset Current Leaderboard</button>
+    <p id="resetHint" style="font-size: 13px; margin-top: 10px;"></p>
   </div>
 
   <script type="module" src="leaderboard.js"></script>
 </body>
 </html>
+  

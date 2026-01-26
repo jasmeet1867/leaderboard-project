@@ -1,290 +1,428 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+// leaderboard.js (FULL FILE)
+// - Global = reads zat-am/Global/players
+// - bp26 = aggregate of bp26-Game1..bp26-Game5
+// - Individual games = zat-am/{gameId}/players
+// - No Firestore orderBy (sort in JS)
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
   getFirestore,
   collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+  getDocs,
+  doc,
+  getDoc,
+  writeBatch,
+  setDoc
+} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA5-cHjL5iL8Arjqv2Pt2WecT8RTLw3Weg",
-  authDomain: "zatam-leaderboard.firebaseapp.com",
-  projectId: "zatam-leaderboard",
-  storageBucket: "zatam-leaderboard.firebasestorage.app",
-  messagingSenderId: "1053027312775",
-  appId: "1:1053027312775:web:43325a831ab077d017c422",
-  measurementId: "G-KP78X2DN6L"
+  apiKey: "AIzaSyAwqOOawElTcsBIAmJQIkZYs-W-h8kJx7A",
+  authDomain: "temporary-db-e9ace.firebaseapp.com",
+  databaseURL: "https://temporary-db-e9ace-default-rtdb.firebaseio.com",
+  projectId: "temporary-db-e9ace",
+  storageBucket: "temporary-db-e9ace.firebasestorage.app",
+  messagingSenderId: "810939107125",
+  appId: "1:810939107125:web:25edc649d354c1ca0bee7c"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-const PER_PAGE = 10;
+// ======================
+// UI references
+// ======================
+const gameSelect = document.getElementById("gameSelect");
+const timeSelect = document.getElementById("timeFilter");
+const leaderboardEl = document.getElementById("leaderboard");
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
+const pageNumEl = document.getElementById("pageNum");
+const totalPagesEl = document.getElementById("totalPages");
+
+const statusToggle = document.getElementById("statusToggle");
+const resetBtn = document.getElementById("resetBtn");
+const resetHint = document.getElementById("resetHint");
+
+// ======================
+// State
+// ======================
+let currentGame = "Global";
 let currentPage = 1;
-let cachedRows = [];
+const perPage = 10;
+let playersData = [];
 
-function esc(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (m) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[m]));
+// ======================
+// Helpers
+// ======================
+function toNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function fmtDate(ms) {
-  if (!ms) return "—";
-  try { return new Date(ms).toLocaleString(); } catch { return "—"; }
+function toMillisMaybe(ts) {
+  // Firestore Timestamp has toMillis()
+  if (ts && typeof ts.toMillis === "function") return ts.toMillis();
+  return ts;
 }
 
-function getTimeCutoff(filter) {
-  const now = new Date();
-  if (filter === "week") return now.getTime() - 7 * 24 * 60 * 60 * 1000;
-  if (filter === "month") return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  if (filter === "year") return new Date(now.getFullYear(), 0, 1).getTime();
-  return null;
+function normalizePlayerDoc(docId, data) {
+  const username = String(
+    data.username ?? data.playerName ?? data.name ?? docId ?? "unknown"
+  ).trim() || String(docId || "unknown");
+
+  const totalScore = toNum(data.totalScore ?? data.score ?? data.total ?? 0);
+
+  let lastPlayed = data.lastPlayed ?? data.last_played ?? data.updatedAt ?? 0;
+  lastPlayed = toNum(toMillisMaybe(lastPlayed));
+
+  return { id: docId, username, totalScore, lastPlayed };
 }
 
-function renderPodium(top3, scopeLabel, scoreField) {
-  const podium = document.getElementById("podium");
-  if (!podium) return;
-
-  const first = top3[0] || null;
-  const second = top3[1] || null;
-  const third = top3[2] || null;
-
-  const box = (rank, cls, p) => `
-    <div class="box ${cls}">
-      <div class="rank">#${rank}</div>
-      <div class="name">${esc(p?.playerName || "—")}</div>
-      <div class="score">${esc(p?.[scoreField] ?? 0)}</div>
-      <div class="game">Scope: ${esc(scopeLabel)}</div>
-    </div>
-  `;
-
-  podium.innerHTML =
-    box(2, "silver", second) +
-    box(1, "gold", first) +
-    box(3, "bronze", third);
+// ======================
+// Firestore fetch
+// ======================
+async function fetchGames() {
+  const snap = await getDocs(collection(db, "zat-am"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-function renderList(rows, scoreField, dateField = "updatedAt") {
-  const list = document.getElementById("leaderboard");
-  if (!list) return;
+async function fetchPlayers(gameId) {
+  const playersCol = collection(db, "zat-am", gameId, "players");
+  const snap = await getDocs(playersCol);
 
-  if (!rows.length) {
-    list.innerHTML = `<div class="muted">No players found.</div>`;
+  const list = snap.docs.map((d) => normalizePlayerDoc(d.id, d.data()));
+  list.sort((a, b) => b.totalScore - a.totalScore);
+  return list;
+}
+
+async function fetchPlayersAggregated(gameIds) {
+  const map = new Map(); // username -> {username,totalScore,lastPlayed}
+
+  for (const gid of gameIds) {
+    try {
+      const players = await fetchPlayers(gid);
+
+      for (const p of players) {
+        const key = String(p.username || p.id || "").trim();
+        if (!key) continue;
+
+        const prev = map.get(key) || { username: key, totalScore: 0, lastPlayed: 0 };
+        prev.totalScore += toNum(p.totalScore);
+        prev.lastPlayed = Math.max(prev.lastPlayed, toNum(p.lastPlayed));
+        map.set(key, prev);
+      }
+    } catch (err) {
+      console.error("Aggregate fetch failed for:", gid, err);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.totalScore - a.totalScore);
+}
+
+// ======================
+// Render
+// ======================
+function listDataOnly() {
+  return playersData.slice(3);
+}
+function getTotalPages(list) {
+  return Math.max(1, Math.ceil(list.length / perPage));
+}
+
+function render() {
+  // Podium
+  for (let i = 0; i < 3; i++) {
+    const player = playersData[i];
+    const nameEl = document.getElementById("name-" + (i + 1));
+    const scoreEl = document.getElementById("score-" + (i + 1));
+
+    if (nameEl) nameEl.textContent = player ? player.username : "---";
+    if (scoreEl) scoreEl.textContent = player ? player.totalScore.toLocaleString() : "---";
+  }
+
+  // List
+  const list = listDataOnly();
+  const totalPages = getTotalPages(list);
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const start = (currentPage - 1) * perPage;
+  const pageSlice = list.slice(start, start + perPage);
+
+  leaderboardEl.innerHTML = pageSlice
+    .map(
+      (p, i) => `
+        <div class="row">
+          <div class="rank-cell">${start + i + 4}</div>
+          <div class="name-cell">${p.username}</div>
+          <div class="score-cell">${p.totalScore.toLocaleString()}</div>
+        </div>
+      `
+    )
+    .join("");
+
+  pageNumEl.textContent = currentPage;
+  totalPagesEl.textContent = totalPages;
+
+  prevBtn.disabled = currentPage === 1;
+  nextBtn.disabled = currentPage === totalPages;
+}
+
+function changePage(page) {
+  const list = listDataOnly();
+  const totalPages = getTotalPages(list);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  render();
+}
+
+nextBtn?.addEventListener("click", () => changePage(currentPage + 1));
+prevBtn?.addEventListener("click", () => changePage(currentPage - 1));
+
+// ======================
+// Chart.js
+// ======================
+const lineGraph = document.getElementById("line-graph");
+let myChart = null;
+
+function ensureChart() {
+  if (!lineGraph || myChart) return;
+
+  const labels = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+  }
+
+  myChart = new Chart(lineGraph, {
+    type: "line",
+    data: { labels, datasets: [{ data: Array(7).fill(0), borderWidth: 3, fill: true }] },
+    options: {
+      aspectRatio: 6,
+      scales: {
+        yAxes: [{ ticks: { beginAtZero: true, padding: 12 } }],
+        xAxes: [{ ticks: { padding: 12 } }]
+      },
+      legend: { display: false }
+    }
+  });
+}
+
+function renderChartFromPlayers(players) {
+  ensureChart();
+  if (!myChart) return;
+
+  const counts = Array(7).fill(0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const p of players) {
+    if (!p.lastPlayed) continue;
+    const d = new Date(p.lastPlayed);
+    d.setHours(0, 0, 0, 0);
+
+    const diffDays = (today - d) / 86400000;
+    if (diffDays >= 0 && diffDays < 7) counts[6 - diffDays] += 1;
+  }
+
+  myChart.data.datasets[0].data = counts;
+  myChart.update();
+}
+
+// ======================
+// Admin Panel
+// ======================
+const mockIsAdmin = true;
+
+onAuthStateChanged(auth, async (user) => {
+  const adminPanel = document.getElementById("adminPanel");
+  if (!adminPanel) return;
+
+  let isAdmin = false;
+  if (user) {
+    const idTokenResult = await user.getIdTokenResult();
+    isAdmin = idTokenResult.claims?.admin === true;
+  }
+
+  adminPanel.style.display = (mockIsAdmin || isAdmin) ? "block" : "none";
+
+  if (mockIsAdmin || isAdmin) {
+    await syncToggleStatus(currentGame);
+    await checkResetEligibility();
+  }
+});
+
+async function syncToggleStatus(gameId) {
+  if (!gameId || gameId === "Global" || gameId === "bp26") {
+    statusToggle.disabled = true;
+    statusToggle.checked = false;
     return;
   }
 
-  const startIndex = (currentPage - 1) * PER_PAGE;
-  const pageRows = rows.slice(startIndex, startIndex + PER_PAGE);
+  statusToggle.disabled = false;
 
-  list.innerHTML = pageRows.map((p, idx) => {
-    const rank = startIndex + idx + 1;
-    const dt = p?.[dateField] ?? p?.updatedAt ?? p?.createdAt ?? 0;
-
-    return `
-      <div class="row" style="
-        display:flex; align-items:center; justify-content:space-between;
-        padding:10px 12px; border-top:1px solid #f2f2f2;
-      ">
-        <div style="display:flex; gap:14px; align-items:center;">
-          <div style="font-weight:900; width:48px;">#${rank}</div>
-          <div style="font-weight:800;">${esc(p.playerName || p.name || "—")}</div>
-        </div>
-
-        <div style="display:flex; gap:18px; align-items:center;">
-          <div style="font-weight:900;">${esc(p?.[scoreField] ?? 0)}</div>
-          <div style="color:#777; font-size:12px; white-space:nowrap;">${esc(fmtDate(dt))}</div>
-        </div>
-      </div>
-    `;
-  }).join("");
+  const gameSnap = await getDoc(doc(db, "zat-am", gameId));
+  statusToggle.checked = gameSnap.exists()
+    ? (gameSnap.data().competitionIsActive === true)
+    : false;
 }
 
-function updatePager() {
-  const pageNum = document.getElementById("pageNum");
-  const prevBtn = document.getElementById("prevBtn");
-  const nextBtn = document.getElementById("nextBtn");
+async function checkResetEligibility() {
+  const gameId = currentGame;
 
-  const totalPages = Math.max(1, Math.ceil(cachedRows.length / PER_PAGE));
+  if (!gameId || gameId === "Global") {
+    resetBtn.disabled = false;
+    resetBtn.style.background = "";
+    resetHint.textContent = "";
+    return;
+  }
 
-  if (pageNum) pageNum.textContent = String(currentPage);
-  if (prevBtn) prevBtn.disabled = currentPage <= 1;
-  if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+  if (gameId === "bp26") {
+    resetBtn.disabled = true;
+    resetBtn.style.background = "#ccc";
+    resetHint.style.color = "#d30000";
+    resetHint.textContent = "bp26 is aggregate. Reset individual games instead.";
+    return;
+  }
+
+  const gameDoc = await getDoc(doc(db, "zat-am", gameId));
+  if (gameDoc.exists() && gameDoc.data().competitionIsActive) {
+    resetBtn.disabled = true;
+    resetBtn.style.background = "#ccc";
+    resetHint.style.color = "#d30000";
+    resetHint.textContent = "Competition active. Reset locked.";
+  } else {
+    resetBtn.disabled = false;
+    resetBtn.style.background = "";
+    resetHint.textContent = "";
+  }
 }
 
-// ---------- BP26 helpers ----------
-function isBP26Selection(gameVal) {
-  return gameVal === "bp26-all" || /^bp26-g[1-5]$/.test(gameVal);
-}
+statusToggle?.addEventListener("change", async (e) => {
+  const gameId = gameSelect.value;
+  if (!gameId || gameId === "Global" || gameId === "bp26") return;
 
-function bp26ScoreField(gameVal) {
-  if (gameVal === "bp26-all") return "bp26Total";
-  const dayNum = Number(gameVal.replace("bp26-g", ""));
-  return `day${dayNum}Score`;
-}
-
-function computeBp26Total(row) {
-  return Number(row.day1Score || 0) +
-    Number(row.day2Score || 0) +
-    Number(row.day3Score || 0) +
-    Number(row.day4Score || 0) +
-    Number(row.day5Score || 0);
-}
-
-// ---------- main loader ----------
-async function loadScores() {
-  const game = document.getElementById("gameSelect")?.value || "aggregate";
-  const time = document.getElementById("timeFilter")?.value || "all";
-  const cutoff = getTimeCutoff(time);
-
-  const list = document.getElementById("leaderboard");
-  if (list) list.innerHTML = `<div class="muted">Loading...</div>`;
+  const newState = e.target.checked;
 
   try {
-    let rows = [];
-    let scopeLabel = "";
-    let scoreField = "";
-    let dateField = "updatedAt";
-
-    // ====== Aggregate ======
-    if (game === "aggregate") {
-      scopeLabel = "All Games";
-      scoreField = "totalScore";
-      dateField = "updatedAt";
-
-      const qAgg = query(
-        collection(db, "scores_aggregate"),
-        orderBy("totalScore", "desc"),
-        limit(1000)
-      );
-      const snap = await getDocs(qAgg);
-      rows = snap.docs.map(d => d.data());
-    }
-
-    // ====== BP26 days/all (from scores_aggregate) ======
-    else if (isBP26Selection(game)) {
-      scoreField = bp26ScoreField(game);
-      scopeLabel =
-        (game === "bp26-all") ? "BP26 (All 5 Days)" :
-          `BP26 Day ${game.replace("bp26-g", "")}`;
-
-      const snap = await getDocs(query(
-        collection(db, "scores_aggregate"),
-        limit(1000)
-      ));
-
-      rows = snap.docs.map(d => d.data()).map(r => ({
-        ...r,
-        bp26Total: computeBp26Total(r)
-      }));
-
-      // ✅ IMPORTANT: do NOT filter out 0 scores
-      // Show anyone who has the field present OR is part of BP26 total
-      rows = rows.filter(r => {
-        if (game === "bp26-all") return true;
-        return r?.[scoreField] !== undefined;
-      });
-
-      // sort desc by chosen field
-      rows.sort((a, b) => Number(b?.[scoreField] ?? 0) - Number(a?.[scoreField] ?? 0));
-
-      dateField = "updatedAt";
-    }
-
-    // ====== Other per-game ======
-    else {
-      scopeLabel = `Game ${game}`;
-      scoreField = "score";
-      dateField = "createdAt";
-
-      // gameId first
-      let snap = await getDocs(query(
-        collection(db, "scores_game"),
-        where("gameId", "==", game),
-        limit(1000)
-      ));
-
-      // fallback to "game"
-      if (snap.empty) {
-        snap = await getDocs(query(
-          collection(db, "scores_game"),
-          where("game", "==", game),
-          limit(1000)
-        ));
-      }
-
-      rows = snap.docs.map(d => d.data()).map(r => ({
-        ...r,
-        playerName: r.playerName || r.name || "—"
-      }));
-
-      rows.sort((a, b) => Number(b?.score ?? 0) - Number(a?.score ?? 0));
-    }
-
-    // time filter client-side
-    if (cutoff !== null) {
-      rows = rows.filter(r => Number(r.updatedAt ?? r.createdAt ?? 0) >= cutoff);
-    }
-
-    cachedRows = rows;
-
-    renderPodium(cachedRows.slice(0, 3), scopeLabel, scoreField);
-
-    const totalPages = Math.max(1, Math.ceil(cachedRows.length / PER_PAGE));
-    if (currentPage > totalPages) currentPage = totalPages;
-
-    renderList(cachedRows, scoreField, dateField);
-    updatePager();
-
+    await setDoc(doc(db, "zat-am", gameId), { competitionIsActive: newState }, { merge: true });
+    await checkResetEligibility();
   } catch (err) {
-    console.error("Firestore error:", err);
-    if (list) list.innerHTML = `<div class="muted">Firestore error. Check console.</div>`;
+    console.error("Update failed:", err);
+    statusToggle.checked = !newState;
+    alert("Database update failed.");
+  }
+});
+
+async function performReset(gameId) {
+  if (gameId === "bp26") {
+    alert("bp26 is aggregate. Reset one of: bp26-Game1..bp26-Game5");
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to clear leaderboard for [${gameId}]?`)) return;
+
+  const playersColRef = collection(db, "zat-am", gameId, "players");
+  const historyColRef = collection(db, "zat-am", gameId, "gameHistory");
+
+  const [playersSnap, historySnap] = await Promise.all([
+    getDocs(playersColRef),
+    getDocs(historyColRef)
+  ]);
+
+  if (playersSnap.empty && historySnap.empty) {
+    alert("Leaderboard is already cleared.");
+    return;
+  }
+
+  const batch = writeBatch(db);
+  playersSnap.forEach((docu) => batch.delete(docu.ref));
+  historySnap.forEach((docu) => batch.delete(docu.ref));
+
+  try {
+    await batch.commit();
+    alert(`Successfully reset ${gameId} leaderboard.`);
+    playersData = [];
+    currentPage = 1;
+    render();
+    renderChartFromPlayers(playersData);
+  } catch (error) {
+    console.error("Reset failed:", error);
+    alert("Error resetting leaderboard. Check console.");
   }
 }
 
-function resetAndLoad() {
+resetBtn?.addEventListener("click", () => {
+  const gameId = gameSelect.value;
+  if (!gameId || gameId === "Global") {
+    alert("Select a game first (not Global).");
+    return;
+  }
+  performReset(gameId);
+});
+
+// ======================
+// Filters
+// ======================
+gameSelect?.addEventListener("change", async (e) => {
+  currentGame = e.target.value;
   currentPage = 1;
-  loadScores();
+
+  try {
+    if (currentGame === "bp26") {
+      playersData = await fetchPlayersAggregated([
+        "bp26-Game1",
+        "bp26-Game2",
+        "bp26-Game3",
+        "bp26-Game4",
+        "bp26-Game5"
+      ]);
+    } else {
+      playersData = await fetchPlayers(currentGame);
+    }
+
+    render();
+    renderChartFromPlayers(playersData);
+
+    await syncToggleStatus(currentGame);
+    await checkResetEligibility();
+  } catch (err) {
+    console.error("Load failed:", err);
+    alert("Failed to load leaderboard data. Check console (F12).");
+  }
+});
+
+timeSelect?.addEventListener("change", () => render());
+
+// ======================
+// Init
+// ======================
+async function init() {
+  const games = await fetchGames();
+
+  gameSelect.innerHTML = "";
+  gameSelect.options.add(new Option("Global", "Global"));
+  gameSelect.options.add(new Option("bp26 (All 5 Games)", "bp26"));
+
+  if (games && games.length) {
+    games
+      .map((g) => g.id)
+      .filter((id) => id !== "Global" && id !== "bp26")
+      .sort()
+      .forEach((id) => gameSelect.options.add(new Option(id, id)));
+  }
+
+  currentGame = "Global";
+  gameSelect.value = "Global";
+
+  playersData = await fetchPlayers("Global");
+
+  render();
+  renderChartFromPlayers(playersData);
+
+  await syncToggleStatus(currentGame);
+  await checkResetEligibility();
 }
 
-// events
-const refreshBtn = document.getElementById("refreshBtn");
-const gameSelect = document.getElementById("gameSelect");
-const timeFilter = document.getElementById("timeFilter");
-const nextBtn = document.getElementById("nextBtn");
-const prevBtn = document.getElementById("prevBtn");
-
-if (refreshBtn) refreshBtn.addEventListener("click", resetAndLoad);
-if (gameSelect) gameSelect.addEventListener("change", resetAndLoad);
-if (timeFilter) timeFilter.addEventListener("change", resetAndLoad);
-
-if (nextBtn) nextBtn.addEventListener("click", () => {
-  const totalPages = Math.max(1, Math.ceil(cachedRows.length / PER_PAGE));
-  if (currentPage < totalPages) {
-    currentPage++;
-    const gv = gameSelect?.value || "aggregate";
-    const sf = gv === "aggregate" ? "totalScore" : (isBP26Selection(gv) ? bp26ScoreField(gv) : "score");
-    renderList(cachedRows, sf, (gv === "aggregate" || isBP26Selection(gv)) ? "updatedAt" : "createdAt");
-    updatePager();
-  }
-});
-
-if (prevBtn) prevBtn.addEventListener("click", () => {
-  if (currentPage > 1) {
-    currentPage--;
-    const gv = gameSelect?.value || "aggregate";
-    const sf = gv === "aggregate" ? "totalScore" : (isBP26Selection(gv) ? bp26ScoreField(gv) : "score");
-    renderList(cachedRows, sf, (gv === "aggregate" || isBP26Selection(gv)) ? "updatedAt" : "createdAt");
-    updatePager();
-  }
-});
-
-// initial
-resetAndLoad();
+init();

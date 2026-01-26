@@ -1,46 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Typer</title>
   <meta name="description" content="A tower defense like typing game">
+
   <script src="https://cdn.jsdelivr.net/npm/@sanskrit-coders/sanscript@1.1.0/sanscript.min.js"></script>
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+  <link rel="stylesheet"
+        href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T"
+        crossorigin="anonymous">
+
   <link rel="stylesheet" href="typer.css">
   <script async src="https://kit.fontawesome.com/a1c4b21e48.js"></script>
+
   <script defer src="canvas.js"></script>
   <script defer src="https://berkerol.github.io/libraries/particle.js"></script>
-  <!-- Firebase (Compat - works with normal JS files) -->
-<script defer src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-
   <script defer src="typer.js"></script>
 </head>
 
 <body>
   <canvas id="canvas">Your browser doesn't support HTML5.</canvas>
 
-<!-- Back to Home Button -->
-<a href="../index24.html" style="
-  position: fixed;
-  top: 15px;
-  left: 15px;
-  z-index: 9999;
-  background: #ffffff;
-  color: #c48b2c;
-  border: 2px solid #c48b2c;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-weight: 700;
-  font-family: Arial, sans-serif;
-  text-decoration: none;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-">
-  ← Home
-</a>
- <a href="../index24.html" style="
+  <!-- Back to Home Button -->
+  <a href="../index24.html" style="
     position: fixed;
     top: 15px;
     left: 15px;
@@ -54,9 +39,17 @@
     font-family: Arial, sans-serif;
     text-decoration: none;
     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-  ">
-    ← Home
-  </a>
-</body>
+  ">← Home</a>
 
+  <!-- ✅ Leaderboard bridge (uses NEW firebase inside ../score-submit.js) -->
+  <script type="module">
+    import { submitScore } from "../score-submit.js";
+
+    // Must match your leaderboard game id / dropdown id
+    const GAME_ID = "GAME 014";
+
+    // expose to typer.js (normal script)
+    window.zatamSubmit = (playerName, points) => submitScore(GAME_ID, playerName, points);
+  </script>
+</body>
 </html>

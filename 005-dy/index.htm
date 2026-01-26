@@ -45,7 +45,7 @@
     <h1 id="jayaH"></h1>
   </div>
 
-  <!-- ✅ Firebase bridge -->
+  <!-- ✅ Firebase bridge (SAME leaderboard system as your site) -->
   <script type="module">
     import { submitScore } from "../score-submit.js";
 
@@ -57,8 +57,10 @@
         if (reported) return;
         reported = true;
 
-        // 1 point per win
-        await submitScore("dvandvayuddham_tictactoe", winnerName, 1);
+        // ✅ IMPORTANT: this must match your Firestore game doc name
+        // Example from your Firestore: "Game 005"
+        await submitScore("Game 005", winnerName, 1);
+
         console.log("✅ Submitted:", winnerName, winnerSymbol);
       },
       resetRound: () => {
@@ -66,23 +68,24 @@
       }
     };
   </script>
+
   <!-- Back to Home Button -->
-<a href="../index24.html" style="
-  position: fixed;
-  top: 15px;
-  left: 15px;
-  z-index: 9999;
-  background: #ffffff;
-  color: #c48b2c;
-  border: 2px solid #c48b2c;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-weight: 700;
-  font-family: Arial, sans-serif;
-  text-decoration: none;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-">
-  ← Home
-</a>
+  <a href="../index24.html" style="
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 9999;
+    background: #ffffff;
+    color: #c48b2c;
+    border: 2px solid #c48b2c;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-family: Arial, sans-serif;
+    text-decoration: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  ">
+    ← Home
+  </a>
 </body>
 </html>

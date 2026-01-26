@@ -14,6 +14,39 @@
   <script src="https://cdn.jsdelivr.net/npm/@sanskrit-coders/sanscript@1.1.0/sanscript.min.js"></script>
   <link href="css/mmk.css" rel="stylesheet" type="text/css" />
   <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+
+  <style>
+    /* Floating submit button + score badge */
+    #submitScoreBtn {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 12px;
+      background: #1f2937;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 9999;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    }
+    #submitScoreBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    #scoreBadge {
+      position: fixed;
+      left: 20px;
+      bottom: 24px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: #ffffff;
+      color: #111827;
+      font-size: 14px;
+      z-index: 9999;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+      border: 1px solid #e5e7eb;
+    }
+  </style>
 </head>
 
 <body>
@@ -32,6 +65,10 @@
     <div id="mytable"></div>
   </center>
 
+  <!-- Score badge + submit button -->
+  <div id="scoreBadge">Score: <span id="scoreValue">0</span></div>
+  <button id="submitScoreBtn">Submit Score (Game 2)</button>
+
   <script>
     // ---------------------------
     // Timer
@@ -44,6 +81,55 @@
       const t = document.getElementById("timeDisp");
       if (t) t.textContent = String(secs);
     }
+
+    // ✅ Submit only once (shared for button + auto submit)
+    let scoreSubmitted = false;
+
+    // will be set after game loads
+    let currentScore = 0;
+
+    function updateScoreUI() {
+      const el = document.getElementById("scoreValue");
+      if (el) el.textContent = String(currentScore);
+    }
+
+    async function submitScoreNow() {
+      // ✅ allow submit even if score = 0
+      if (scoreSubmitted) return;
+
+      const btn = document.getElementById("submitScoreBtn");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Submitting...";
+      }
+
+      try {
+        if (typeof window.reportScore !== "function") {
+          alert("Score system not loaded. Check ./js/bp26-score.js path.");
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Submit Score (Game 2)";
+          }
+          return;
+        }
+
+        await window.reportScore(currentScore);
+        scoreSubmitted = true;
+
+        if (btn) btn.textContent = `Submitted ✅ (Score: ${currentScore})`;
+        console.log("✅ Game2 score submitted:", currentScore);
+      } catch (e) {
+        console.error("❌ submit score failed", e);
+        alert("Submit failed. Open Console (F12) and send the red error.");
+
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Submit Score (Game 2)";
+        }
+      }
+    }
+
+    document.getElementById("submitScoreBtn").addEventListener("click", submitScoreNow);
 
     // ---------------------------
     // Load CSV
@@ -205,32 +291,22 @@
 
       genTable(rowLength, colLength, D2Data);
 
-      // ✅ Submit only once
-      let scoreSubmitted = false;
-
       // ✅ Score formula
       function computeScore() {
-        const totalPairs = wpp; // 15
-        const base = totalPairs * 10;           // 150
+        const totalPairs = wpp;               // 15
+        const base = totalPairs * 10;         // 150
         const penaltyWrong = numberOfWrongTries * 2;
-        const penaltyTime = secs;              // seconds
-        const score = Math.max(0, base - penaltyWrong - penaltyTime);
-        return score;
+        const penaltyTime = secs;            // seconds
+        return Math.max(0, base - penaltyWrong - penaltyTime);
       }
 
-      async function submitFinalScore() {
-        if (scoreSubmitted) return;
-        scoreSubmitted = true;
-
-        const finalScore = computeScore();
-        try {
-          // reportScore() is defined by bp26-score.js
-          await window.reportScore(finalScore);
-          console.log("✅ Day 2 score submitted:", finalScore);
-        } catch (e) {
-          console.error("❌ submit score failed", e);
-        }
+      function refreshCurrentScore() {
+        currentScore = computeScore(); // always keep updated
+        updateScoreUI();
       }
+
+      // initial score badge
+      refreshCurrentScore();
 
       var clkfn = function () {
         var row = this.parentElement.parentElement.rowIndex;
@@ -282,12 +358,16 @@
               clickedCards = [];
               count += 2;
 
+              refreshCurrentScore();
+
               // GAME COMPLETE
               if (count == gamesize) {
                 if (timer) clearInterval(timer);
 
-                // ✅ submit score to Firebase (Day 2)
-                submitFinalScore();
+                refreshCurrentScore(); // final score
+
+                // ✅ auto submit at end (still works, even if 0)
+                submitScoreNow();
 
                 window.alert(
                   "उत्तमम् ! You matched all " +
@@ -295,7 +375,7 @@
                   " in " + Sanscript.t(String(secs), 'iast', 'devanagari') +
                   " seconds while making " +
                   Sanscript.t(String(numberOfWrongTries), 'iast', 'devanagari') +
-                  " wrong moves.\n\nFinal Score: " + computeScore()
+                  " wrong moves.\n\nFinal Score: " + currentScore
                 );
 
                 var ask = confirm("पुनः ? Press 'ok' to play again");
@@ -307,7 +387,6 @@
               numberOfWrongTries += 1;
               triesElement.innerHTML = Sanscript.t(String(numberOfWrongTries), 'iast', 'devanagari');
 
-              // show second card (image) briefly
               if (this.tagName.toLowerCase() === "img") {
                 this.src = D2Data[row][column].src;
               }
@@ -318,6 +397,8 @@
               var d = document.getElementsByTagName("tr")[clickedCards[0].x];
               var r = d.getElementsByTagName("td")[clickedCards[0].y];
               r.style.border = "1px solid blue";
+
+              refreshCurrentScore();
 
               setTimeout(flipback, 700, row, column, this, clickedCards, waiting, D2Data);
             }
@@ -338,6 +419,8 @@
         D2Data[row][column].clicked = false;
         waiting.value = false;
         clickedCards.splice(0, 1);
+
+        refreshCurrentScore();
       }
 
       if (l != 1) {
@@ -350,11 +433,10 @@
     }
   </script>
 
-  <!-- ✅ BP26 Scoring (Day 2) -->
   <script type="module">
     import "./js/bp26-score.js";
-    // Ask name every launch + set game/day
-    window.bp26Init({ game: "mk", day: 2 });
+    // ✅ Save under bp26-Game2 (separate), and included in bp26 aggregate
+    window.bp26Init({ game: "bp26-Game2", day: 2 });
   </script>
 
 </body>

@@ -12,14 +12,12 @@
 
     <p class="toppanel">स्वरः-paint</p>
 
-    <!-- letters to pick from (KEEP YOUR ORIGINAL ONES HERE) -->
     <div class="gamedata" id="chars">
       अआइईउऊऋएऐओऔअंअःकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह
     </div>
 
     <canvas></canvas>
 
-    <!-- Intro -->
     <div class="cover" id="intro">
       <p>
         Paint over the letter you see on the screen. Can you write it without going outside of it?
@@ -27,7 +25,6 @@
       </p>
     </div>
 
-    <!-- Win -->
     <div class="cover check" id="win">
       <p>
         Great! +10 points
@@ -35,7 +32,6 @@
       </p>
     </div>
 
-    <!-- Error -->
     <div class="cover" id="error">
       <p>
         Oops! You went outside.
@@ -43,11 +39,9 @@
       </p>
     </div>
 
-    <!-- Buttons -->
     <button class="navbutton" id="sound" type="button">♫</button>
     <button class="actionbutton undo" id="reload" type="button">X</button>
 
-    <!-- Sounds -->
     <audio id="winsound" preload="auto">
       <source src="win.ogg" type="audio/ogg">
     </audio>
@@ -55,10 +49,35 @@
 
   </div>
 
-  <!-- ✅ NEW: Firestore + ask player name (does NOT change UI) -->
-  <script type="module" src="score-writer.js"></script>
+  <!-- ✅ Leaderboard bridge -->
+  <script type="module">
+    import { submitScore } from "../score-submit.js";
 
-  <!-- Your original game logic (with tiny score call added) -->
+    const GAME_ID = "026-sp";
+    const POINTS_PER_WIN = 10;
+
+    function ensureName() {
+      let name = (localStorage.getItem("zatam_username") || "").trim();
+      if (!name) {
+        name = prompt("Enter your name for the leaderboard:", "Guest") || "Guest";
+        name = name.trim() || "Guest";
+        localStorage.setItem("zatam_username", name);
+      }
+      return name;
+    }
+
+    window.zatamLB26 = {
+      ensureName,
+      awardWin: async () => {
+        const name = ensureName();
+        await submitScore(GAME_ID, name, POINTS_PER_WIN);
+        console.log("✅ 026-sp submitted:", name, POINTS_PER_WIN);
+      }
+    };
+
+    ensureName();
+  </script>
+
   <script src="letterpaint.js"></script>
 </body>
 </html>

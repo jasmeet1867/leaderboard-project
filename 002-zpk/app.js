@@ -1,30 +1,32 @@
 // app.js (type="module")
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
   getFirestore,
   doc,
   setDoc,
-  increment
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+  increment,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
-// ✅ Firebase config
+// ✅ NEW Firebase config (temporary-db-e9ace)
 const firebaseConfig = {
-  apiKey: "AIzaSyA5-cHjL5iL8Arjqv2Pt2WecT8RTLw3Weg",
-  authDomain: "zatam-leaderboard.firebaseapp.com",
-  projectId: "zatam-leaderboard",
-  storageBucket: "zatam-leaderboard.firebasestorage.app",
-  messagingSenderId: "1053027312775",
-  appId: "1:1053027312775:web:43325a831ab077d017c422",
-  measurementId: "G-KP78X2DN6L"
+  apiKey: "AIzaSyAwqOOawElTcsBIAmJQIkZYs-W-h8kJx7A",
+  authDomain: "temporary-db-e9ace.firebaseapp.com",
+  databaseURL: "https://temporary-db-e9ace-default-rtdb.firebaseio.com",
+  projectId: "temporary-db-e9ace",
+  storageBucket: "temporary-db-e9ace.firebasestorage.app",
+  messagingSenderId: "810939107125",
+  appId: "1:810939107125:web:25edc649d354c1ca0bee7c"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ✅ IMPORTANT: must match your leaderboard dropdown values exactly
-// For Rock/Paper/Scissors game, set it to the correct one:
-const GAME_ID = "044-gp"; // <-- change if needed (example: "002-zpk", "005-dy", etc.)
+// ✅ CHANGE THIS to match your Firestore game document under zat-am
+// Examples: "002", "Rock Paper Scissors", "002-rps" — must match EXACTLY
+const GAME_ID = "Rock Paper Scissors";
+
 
 // ---------------- GAME VARIABLES ----------------
 let musicOn = true;
@@ -41,64 +43,58 @@ const userLabelDiv = document.getElementById("user-label");
 
 // Player info
 let playerName = "Guest";
-let playerId = "guest";
+let playerDocId = "Guest"; // ✅ In your DB, doc id itself is name (e.g., "Charles McGill")
 
 // ---------------- ASK NAME ----------------
 function askName() {
   const input = prompt("Enter your name:", "Guest");
   playerName = (input && input.trim()) ? input.trim() : "Guest";
 
-  // doc id like "guest", "jessie"
-  playerId = playerName
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/[^a-z0-9]/g, "");
-
-  if (!playerId) playerId = "guest";
+  // ✅ IMPORTANT:
+  // Your leaderboard uses doc IDs as names, so KEEP it readable.
+  // Firestore doc IDs allow spaces, so we can use the name directly.
+  playerDocId = playerName;
 
   if (userLabelDiv) userLabelDiv.innerHTML = `${playerName}<br>mama<br>मम`;
 
-  console.log("Player:", playerName, "DocID:", playerId, "Game:", GAME_ID);
+  console.log("Player:", playerName, "DocID:", playerDocId, "Game:", GAME_ID);
 }
 
-// ---------------- FIREBASE: ADD WIN (+1) ----------------
-// ✅ updates BOTH aggregate + per-game
-async function addWinToFirebase() {
+// ---------------- FIRESTORE: ADD WIN (+1) ----------------
+// ✅ updates BOTH:
+// 1) Global leaderboard: zat-am / Global / players / {playerDocId}
+// 2) Game leaderboard:   zat-am / {GAME_ID} / players / {playerDocId}
+async function addWinToFirestore() {
   try {
     const now = Date.now();
 
-    // 1) ✅ OVERALL leaderboard (scores_aggregate)
-    const aggRef = doc(db, "scores_aggregate", playerId);
+    // 1) ✅ GLOBAL players
+    const globalPlayerRef = doc(db, "zat-am", "Global", "players", playerDocId);
 
     await setDoc(
-      aggRef,
+      globalPlayerRef,
       {
-        playerName: playerName,
         totalScore: increment(1),
-        updatedAt: now
+        lastPlayed: now
       },
       { merge: true }
     );
 
-    // 2) ✅ PER-GAME leaderboard (scores_game)
-    // doc per player per game => "044-gp__jessie"
-    const gameDocId = `${GAME_ID}__${playerId}`;
-    const gameRef = doc(db, "scores_game", gameDocId);
+    // 2) ✅ PER-GAME players
+    const gamePlayerRef = doc(db, "zat-am", GAME_ID, "players", playerDocId);
 
     await setDoc(
-      gameRef,
+      gamePlayerRef,
       {
-        gameId: GAME_ID,
-        playerName: playerName,
-        score: increment(1),
-        updatedAt: now
+        totalScore: increment(1),
+        lastPlayed: now
       },
       { merge: true }
     );
 
-    console.log("✅ Updated: scores_aggregate + scores_game");
+    console.log("✅ Updated Global + Game players");
   } catch (error) {
-    console.error("❌ Firebase update failed:", error);
+    console.error("❌ Firestore update failed:", error);
   }
 }
 
@@ -123,8 +119,8 @@ function win(userInput, compChoice) {
   document.getElementById(userInput).classList.add("win");
   setTimeout(() => document.getElementById(userInput).classList.remove("win"), 350);
 
-  // ✅ Save +1 in Firebase (aggregate + per-game)
-  addWinToFirebase();
+  // ✅ Save +1 in Firestore
+  addWinToFirestore();
 }
 
 function lose(userInput, compChoice) {
@@ -176,6 +172,12 @@ musicNode.onclick = function () {
 };
 
 // ---------------- GAME LOOP ----------------
+function toDevanagariDigits(num) {
+  return String(num)
+    .replace(/0/g,"०").replace(/1/g,"१").replace(/2/g,"२").replace(/3/g,"३").replace(/4/g,"४")
+    .replace(/5/g,"५").replace(/6/g,"६").replace(/7/g,"७").replace(/8/g,"८").replace(/9/g,"९");
+}
+
 function game(userInput) {
   const compChoice = computerChoice();
   const combo = userInput + compChoice;
@@ -188,14 +190,8 @@ function game(userInput) {
     draw(userInput, compChoice);
   }
 
-  // Update scoreboard in Devanagari digits
-  userScore_span.innerHTML = userScore.toString()
-    .replace(/0/g,"०").replace(/1/g,"१").replace(/2/g,"२").replace(/3/g,"३").replace(/4/g,"४")
-    .replace(/5/g,"५").replace(/6/g,"६").replace(/7/g,"७").replace(/8/g,"८").replace(/9/g,"९");
-
-  computerScore_span.innerHTML = computerScore.toString()
-    .replace(/0/g,"०").replace(/1/g,"१").replace(/2/g,"२").replace(/3/g,"३").replace(/4/g,"४")
-    .replace(/5/g,"५").replace(/6/g,"६").replace(/7/g,"७").replace(/8/g,"८").replace(/9/g,"९");
+  userScore_span.innerHTML = toDevanagariDigits(userScore);
+  computerScore_span.innerHTML = toDevanagariDigits(computerScore);
 }
 
 function main() {

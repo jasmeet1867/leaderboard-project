@@ -93,13 +93,10 @@
   <script src="js/utils.js"></script>
   <script src="js/event.js"></script>
   <script src="js/view.js"></script>
-
-  <!-- ✅ Firebase (Compat) MUST load BEFORE main.js -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-
   <script src="js/game.js"></script>
-  <script src="js/main.js"></script>
+
+  <!-- ✅ IMPORTANT: main.js is now a module because it imports submitScore -->
+  <script type="module" src="js/main.js"></script>
 
   <!-- Back to Home Button -->
   <a href="../index24.html" style="

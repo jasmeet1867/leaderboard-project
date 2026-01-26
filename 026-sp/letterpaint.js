@@ -45,11 +45,11 @@
   function init() {
     xoffset = container.offsetLeft;
     yoffset = container.offsetTop;
-    
+
     // Adjusted sizes for better gameplay
     fontsize = container.offsetHeight / 1.5;
     linewidth = container.offsetHeight / 10; // Thicker brush for easier painting
-    
+
     paintletter();
     setstate('intro');
   }
@@ -77,7 +77,7 @@
   function setstate(newstate) {
     state = newstate;
     container.className = newstate;
-    currentstate = state; 
+    currentstate = state;
   }
 
   function retry(ev) {
@@ -92,8 +92,9 @@
   }
 
   function start() {
-    if (window.ensurePlayerName) {
-      window.ensurePlayerName(true); 
+    // ✅ NEW: use your new leaderboard bridge (asks name once via localStorage)
+    if (window.zatamLB26 && window.zatamLB26.ensureName) {
+      window.zatamLB26.ensureName();
     }
     paintletter(letter);
   }
@@ -229,10 +230,15 @@
           winsound.play();
         }
 
+        // ✅ NEW: submit score once per win to the SAME leaderboard system
         if (!winSubmitted) {
           winSubmitted = true;
-          if (window.awardPoints) {
-            window.awardPoints(10).catch(console.error);
+
+          // call the bridge you defined in index.html
+          if (window.zatamLB26 && window.zatamLB26.awardWin) {
+            Promise.resolve(window.zatamLB26.awardWin()).catch(console.error);
+          } else {
+            console.warn("zatamLB26 bridge not found. Did you include the module script in index.html?");
           }
         }
       }

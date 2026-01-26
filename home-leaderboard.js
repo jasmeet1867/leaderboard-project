@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
   getFirestore,
   collection,
@@ -6,42 +6,57 @@ import {
   orderBy,
   limit,
   getDocs
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
+// ✅ temporary-db-e9ace (same as big leaderboard)
 const firebaseConfig = {
-  apiKey: "AIzaSyA5-cHjL5iL8Arjqv2Pt2WecT8RTLw3Weg",
-  authDomain: "zatam-leaderboard.firebaseapp.com",
-  projectId: "zatam-leaderboard",
-  storageBucket: "zatam-leaderboard.firebasestorage.app",
-  messagingSenderId: "1053027312775",
-  appId: "1:1053027312775:web:43325a831ab077d017c422",
-  measurementId: "G-KP78X2DN6L"
+  apiKey: "AIzaSyAwqOOawElTcsBIAmJQIkZYs-W-h8kJx7A",
+  authDomain: "temporary-db-e9ace.firebaseapp.com",
+  databaseURL: "https://temporary-db-e9ace-default-rtdb.firebaseio.com",
+  projectId: "temporary-db-e9ace",
+  storageBucket: "temporary-db-e9ace.firebasestorage.app",
+  messagingSenderId: "810939107125",
+  appId: "1:810939107125:web:25edc649d354c1ca0bee7c"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 function setRow(i, name, score) {
-  document.getElementById(`hp${i}Name`).textContent = name ?? "—";
-  document.getElementById(`hp${i}Score`).textContent = score ?? 0;
+  document.getElementById(`p${i}Name`).textContent = name ?? "—";
+  document.getElementById(`p${i}Score`).textContent = (score ?? 0).toLocaleString();
 }
 
 async function loadTop3() {
   try {
-    // MUST match your working leaderboard page:
-    // collection: "leaderboard"
-    // fields: name, totalscore
-    const q = query(collection(db, "leaderboard"), orderBy("totalscore", "desc"), limit(3));
-    const snap = await getDocs(q);
+    // ✅ Read from: zat-am / Global / players
+    // Order by totalScore (matches your Firestore field)
+    const qTop = query(
+      collection(db, "zat-am", "Global", "players"),
+      orderBy("totalScore", "desc"),
+      limit(3)
+    );
 
-    const list = [];
-    snap.forEach(d => list.push(d.data()));
+    const snap = await getDocs(qTop);
 
-    setRow(1, list[0]?.name, list[0]?.totalscore);
-    setRow(2, list[1]?.name, list[1]?.totalscore);
-    setRow(3, list[2]?.name, list[2]?.totalscore);
+    const top = [];
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      top.push({
+        // ✅ NAME comes from doc ID if username not stored
+        name: data.username ?? docSnap.id,
+        totalScore: Number(data.totalScore ?? 0)
+      });
+    });
+
+    setRow(1, top[0]?.name, top[0]?.totalScore);
+    setRow(2, top[1]?.name, top[1]?.totalScore);
+    setRow(3, top[2]?.name, top[2]?.totalScore);
   } catch (err) {
-    console.error("Homepage leaderboard fetch failed:", err);
+    console.error("Mini leaderboard failed:", err);
+    setRow(1, "—", 0);
+    setRow(2, "—", 0);
+    setRow(3, "—", 0);
   }
 }
 
