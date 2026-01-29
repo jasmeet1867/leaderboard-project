@@ -505,13 +505,12 @@
   <script type="module" src="./js/bp26-score.js"></script>
 
   <!-- IMPORTANT: Initialize BP26 (prompts name every time) -->
-  <script>
-    window.addEventListener("DOMContentLoaded", () => {
-      if (window.bp26Init) {
-        window.bp26Init({ game: BP26_GAME, day: BP26_DAY });
-      }
-    });
-  </script>
+  <script type="module">
+  import { bp26Init, reportScore } from "./js/bp26-score.js";
+  window.reportScore = reportScore;
+  bp26Init({ game: "bp26-Game4" });
+</script>
+
 
 </body>
 </html>

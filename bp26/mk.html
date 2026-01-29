@@ -433,10 +433,30 @@
     }
   </script>
 
+  <!-- ✅ Game 2 leaderboard init + FORCE NAME PROMPT ON LAUNCH -->
   <script type="module">
-    import "./js/bp26-score.js";
-    // ✅ Save under bp26-Game2 (separate), and included in bp26 aggregate
-    window.bp26Init({ game: "bp26-Game2", day: 2 });
+    import { bp26Init, reportScore } from "./js/bp26-score.js";
+
+    // expose submit function for your non-module script
+    window.reportScore = reportScore;
+
+    // ✅ ALWAYS ask name every time page loads
+    localStorage.removeItem("bp26_username");
+
+    // init this as Game 2
+    bp26Init({ game: "bp26-Game2" });
+
+    // force prompt now (writes 0 one time)
+    await reportScore(0);
+
+    // allow real submit later
+    // (otherwise the 0 submit would lock your button)
+    scoreSubmitted = false;
+    const btn = document.getElementById("submitScoreBtn");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Submit Score (Game 2)";
+    }
   </script>
 
 </body>

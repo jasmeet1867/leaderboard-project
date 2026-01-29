@@ -43,7 +43,7 @@
 </main>
 
 <script>
-  const state = { items: [], assigned: new Map() };
+  const state = { items: [], assigned: new Map(), submitting:false };
   const els = {
     cards: document.getElementById("cards"),
     tiles: document.getElementById("tiles"),
@@ -100,12 +100,15 @@
   function assign(id, drop) {
     const tile = document.querySelector(`.tile[data-id="${id}"]`);
     if (!tile) return;
-
     drop.textContent = tile.textContent;
     state.assigned.set(drop.dataset.id, id);
   }
 
   async function checkAnswers() {
+    if (state.submitting) return;
+    state.submitting = true;
+    els.checkBtn.disabled = true;
+
     let correct = 0;
 
     state.items.forEach(item => {
@@ -128,10 +131,9 @@
 
     els.score.textContent = correct;
 
-    // ✅ Always submit (even if correct = 0)
     try {
       if (typeof window.reportScore !== "function") {
-        alert("Score system not loaded. Check js/bp26-score.js path.");
+        alert("Score system not loaded. Check ./js/bp26-score.js path.");
         return;
       }
       console.log("Submitting score:", correct);
@@ -140,13 +142,15 @@
     } catch (e) {
       console.error("Submit error:", e);
       alert("Firebase submit failed. Open Console (F12) and send the red error.");
+    } finally {
+      state.submitting = false;
+      els.checkBtn.disabled = false;
     }
   }
 
   els.checkBtn.onclick = checkAnswers;
   els.resetBtn.onclick = () => location.reload();
 
-  // LOAD WORDS (12)
   Papa.parse(
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6CFR_0gDsZl-lmwLFWmtdXMXYGVEHGJ8fvBu2_5wvbEl9L-4Yr0ugI0TFTTdvtLlMTRmLnCIJ5FBF/pub?gid=0&single=true&output=csv",
     {
@@ -169,11 +173,17 @@
 <script type="module">
   import { bp26Init, reportScore } from "./js/bp26-score.js";
 
-  // keep compatibility
+  // expose submit function for your non-module script
   window.reportScore = reportScore;
 
-  // init this game
+  // ✅ ALWAYS ask name on each launch (clear saved name)
+  localStorage.removeItem("bp26_username");
+
+  // ✅ This page is bp26 Game 5
   bp26Init({ game: "bp26-Game5" });
+
+  // ✅ Trigger prompt immediately (writes 0 once on launch)
+  await reportScore(0);
 </script>
 
 </body>

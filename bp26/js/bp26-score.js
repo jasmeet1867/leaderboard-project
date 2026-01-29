@@ -1,16 +1,24 @@
-// js/bp26-score.js
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+// js/bp26-score.js (FULL FILE - COPY/PASTE)
+// ✅ Prompt ONLY at game start using bp26PromptName()
+// ✅ reportScore() NEVER prompts (even if username missing)
+// ✅ Writes to:
+// 1) zat-am/{gameId}/players
+// 2) zat-am/{gameId}/seasons/{YYYY-MM-DD}/players
+// 3) zat-am/Global/players
+// 4) zat-am/Global/seasons/{YYYY-MM-DD}/players
+// 5) gameHistory + seasons/{dayId}/gameHistory (dayId included)
+
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
   getFirestore,
   doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  increment,
-  serverTimestamp,
   collection,
-  addDoc
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+  setDoc,
+  addDoc,
+  serverTimestamp,
+  increment,
+  writeBatch
+} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAwqOOawElTcsBIAmJQIkZYs-W-h8kJx7A",
@@ -22,123 +30,180 @@ const firebaseConfig = {
   appId: "1:810939107125:web:25edc649d354c1ca0bee7c"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-console.log("✅ Firebase connected to projectId:", app.options.projectId);
+// --------------------
+// State
+// --------------------
+let CURRENT_GAME_ID = null;
 
-let CURRENT_USER = "";
-let BP26_GAME = "bp26-Game1"; // default
+// ✅ In-memory cache (prevents double prompting in same page load)
+let CACHED_USERNAME = "";
 
-function askNameEveryLaunch() {
+// --------------------
+// Helpers
+// --------------------
+function dayIdFromDate(d = new Date()) {
+  return d.toISOString().split("T")[0]; // YYYY-MM-DD
+}
+
+function cleanName(s) {
+  return String(s ?? "").trim();
+}
+
+function playerDocIdFromUsername(username) {
+  return cleanName(username).toLowerCase().replace(/\s+/g, "_").slice(0, 60) || "unknown";
+}
+
+// ✅ PROMPT ONLY (NO FIRESTORE WRITE)
+export function bp26PromptName({ force = false } = {}) {
+  if (force) {
+    try { localStorage.removeItem("bp26_username"); } catch (e) {}
+    CACHED_USERNAME = "";
+  }
+
+  // cached
+  if (CACHED_USERNAME) return CACHED_USERNAME;
+
+  // localStorage
+  let saved = "";
+  try { saved = cleanName(localStorage.getItem("bp26_username")); } catch (e) {}
+  if (saved) {
+    CACHED_USERNAME = saved;
+    return saved;
+  }
+
+  // prompt
   let name = "";
   while (!name) {
     name = prompt("Enter your name for the leaderboard:");
     if (name === null) name = "";
-    name = name.trim();
+    name = cleanName(name);
   }
-  CURRENT_USER = name;
+
+  try { localStorage.setItem("bp26_username", name); } catch (e) {}
+  CACHED_USERNAME = name;
   return name;
 }
 
-function safeId(name) {
-  return (
-    name
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_]/g, "") || "guest"
-  );
-}
+// ✅ NO PROMPT — used by reportScore
+function getUsernameNoPrompt() {
+  if (CACHED_USERNAME) return CACHED_USERNAME;
 
-// Create parent docs so they show in Firestore left panel (zat-am collection)
-async function ensureParentsUnderZatAm() {
-  await Promise.all([
-    setDoc(doc(db, "zat-am", "Global"), { label: "Global", updatedAt: serverTimestamp() }, { merge: true }),
-    setDoc(doc(db, "zat-am", "bp26"), { label: "bp26", updatedAt: serverTimestamp() }, { merge: true }),
-    setDoc(doc(db, "zat-am", BP26_GAME), { label: BP26_GAME, updatedAt: serverTimestamp() }, { merge: true })
-  ]);
-}
-
-export function bp26Init({ game } = {}) {
-  // ask name EVERY launch (your requirement)
-  askNameEveryLaunch();
-
-  if (game) BP26_GAME = String(game);
-
-  console.log("✅ BP26 INIT:", { user: CURRENT_USER, game: BP26_GAME });
-}
-
-// Upsert (and increment) player doc
-async function upsertIncrement(ref, name, delta) {
-  const snap = await getDoc(ref);
-
-  if (snap.exists()) {
-    await updateDoc(ref, {
-      name,
-      playerName: name,
-      score: increment(delta),      // leaderboard uses score
-      lastScore: delta,
-      updatedAt: serverTimestamp()  // leaderboard reads this for lastPlayed
-    });
-  } else {
-    await setDoc(ref, {
-      name,
-      playerName: name,
-      score: delta,                 // can be 0 ✅
-      lastScore: delta,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+  let saved = "";
+  try { saved = cleanName(localStorage.getItem("bp26_username")); } catch (e) {}
+  if (saved) {
+    CACHED_USERNAME = saved;
+    return saved;
   }
+
+  // ✅ NEVER prompt here
+  return "unknown";
 }
 
-// Add a history record (like your screenshot: score, timestamp, username)
-async function addHistory(gameId, name, score) {
-  const historyCol = collection(db, "zat-am", gameId, "gameHistory");
-  await addDoc(historyCol, {
-    username: name,
-    score: Number(score),
-    timestamp: Date.now(),          // matches your screenshot style
-    createdAt: serverTimestamp()
-  });
+// --------------------
+// Public API
+// --------------------
+export function bp26Init({ game }) {
+  CURRENT_GAME_ID = game;
+
+  if (!CURRENT_GAME_ID) {
+    console.warn("bp26Init called without game id");
+    return;
+  }
+
+  try { localStorage.setItem("bp26_last_game", CURRENT_GAME_ID); } catch (e) {}
 }
 
 export async function reportScore(score) {
-  if (!CURRENT_USER) askNameEveryLaunch();
+  const gameId =
+    CURRENT_GAME_ID ||
+    cleanName((() => {
+      try { return localStorage.getItem("bp26_last_game"); } catch (e) { return ""; }
+    })());
 
-  const s = Number(score);
-  if (!Number.isFinite(s)) throw new Error("Score must be a number."); // 0 allowed ✅
+  if (!gameId) throw new Error("bp26Init({ game: 'bp26-GameX' }) was not called.");
 
-  const id = safeId(CURRENT_USER);
-  const name = CURRENT_USER;
+  // ✅ NEVER prompts
+  const username = getUsernameNoPrompt();
+  const pid = playerDocIdFromUsername(username);
+  const points = Number(score) || 0;
 
-  await ensureParentsUnderZatAm();
+  const now = Date.now();
+  const dayId = dayIdFromDate(new Date());
 
-  // ✅ refs
-  const gamePlayerRef = doc(db, "zat-am", BP26_GAME, "players", id);
-  const bp26PlayerRef = doc(db, "zat-am", "bp26", "players", id);
-  const globPlayerRef = doc(db, "zat-am", "Global", "players", id);
+  // --------------------
+  // Refs
+  // --------------------
+  const gamePlayersRef = doc(db, "zat-am", gameId, "players", pid);
+  const gameHistoryCol = collection(db, "zat-am", gameId, "gameHistory");
 
-  // ✅ write players (so leaderboard shows it)
-  await Promise.all([
-    upsertIncrement(gamePlayerRef, name, s),
-    upsertIncrement(bp26PlayerRef, name, s),
-    upsertIncrement(globPlayerRef, name, s)
-  ]);
+  const gameSeasonPlayersRef = doc(db, "zat-am", gameId, "seasons", dayId, "players", pid);
+  const gameSeasonHistoryCol = collection(db, "zat-am", gameId, "seasons", dayId, "gameHistory");
 
-  // ✅ write history (so format matches Game1)
-  await Promise.all([
-    addHistory(BP26_GAME, name, s),
-    addHistory("Global", name, s)
-    // (optional) if you also want bp26 history:
-    // addHistory("bp26", name, s),
-  ]);
+  const globalPlayersRef = doc(db, "zat-am", "Global", "players", pid);
+  const globalHistoryCol = collection(db, "zat-am", "Global", "gameHistory");
 
-  console.log("🔥 SCORE SAVED:", { game: BP26_GAME, user: id, score: s });
-  return { ok: true };
+  const globalSeasonPlayersRef = doc(db, "zat-am", "Global", "seasons", dayId, "players", pid);
+  const globalSeasonHistoryCol = collection(db, "zat-am", "Global", "seasons", dayId, "gameHistory");
+
+  // --------------------
+  // Update players (batch)
+  // --------------------
+  const batch = writeBatch(db);
+
+  batch.set(gamePlayersRef, {
+    username,
+    totalScore: increment(points),
+    lastPlayed: serverTimestamp(),
+    lastPlayedDay: dayId,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  batch.set(gameSeasonPlayersRef, {
+    username,
+    totalScore: increment(points),
+    lastPlayed: serverTimestamp(),
+    lastPlayedDay: dayId,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  batch.set(globalPlayersRef, {
+    username,
+    totalScore: increment(points),
+    lastPlayed: serverTimestamp(),
+    lastPlayedDay: dayId,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  batch.set(globalSeasonPlayersRef, {
+    username,
+    totalScore: increment(points),
+    lastPlayed: serverTimestamp(),
+    lastPlayedDay: dayId,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  await batch.commit();
+
+  // --------------------
+  // Add history docs
+  // --------------------
+  const historyPayload = {
+    username,
+    playerId: pid,
+    gameId,
+    score: points,
+    timestamp: now,
+    dayId
+  };
+
+  await addDoc(gameHistoryCol, historyPayload);
+  await addDoc(gameSeasonHistoryCol, historyPayload);
+
+  await addDoc(globalHistoryCol, historyPayload);
+  await addDoc(globalSeasonHistoryCol, historyPayload);
+
+  return { ok: true, username, points, gameId, dayId };
 }
-
-// expose for non-module usage too
-window.bp26Init = bp26Init;
-window.reportScore = reportScore;

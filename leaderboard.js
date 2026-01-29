@@ -1,8 +1,9 @@
 // leaderboard.js (FULL FILE)
-// - Global = reads zat-am/Global/players
-// - bp26 = aggregate of bp26-Game1..bp26-Game5
-// - Individual games = zat-am/{gameId}/players
-// - No Firestore orderBy (sort in JS)
+// ✅ Key behavior:
+// - All Time (no date picked): shows ALL players across ALL resets (current + all seasons)
+// - If you pick a date (calendar): shows ONLY scores made on that date (by history timestamp)
+// - Works even if players docs have no date, because it uses gameHistory timestamps
+// - bp26 aggregate respects date selection (Game1..Game5)
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
@@ -12,7 +13,8 @@ import {
   doc,
   getDoc,
   writeBatch,
-  setDoc
+  setDoc,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 
@@ -35,6 +37,9 @@ const auth = getAuth(app);
 // ======================
 const gameSelect = document.getElementById("gameSelect");
 const timeSelect = document.getElementById("timeFilter");
+const seasonDate = document.getElementById("seasonDate");
+const clearDateBtn = document.getElementById("clearDateBtn");
+
 const leaderboardEl = document.getElementById("leaderboard");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
@@ -53,6 +58,9 @@ let currentPage = 1;
 const perPage = 10;
 let playersData = [];
 
+// cache seasons list per game
+const seasonsCache = new Map(); // gameId -> [seasonId,...]
+
 // ======================
 // Helpers
 // ======================
@@ -62,63 +70,176 @@ function toNum(v) {
 }
 
 function toMillisMaybe(ts) {
-  // Firestore Timestamp has toMillis()
-  if (ts && typeof ts.toMillis === "function") return ts.toMillis();
-  return ts;
+  if (!ts) return 0;
+  if (typeof ts === "number") return ts;
+
+  // Firestore Timestamp
+  if (typeof ts?.toMillis === "function") return ts.toMillis();
+
+  // Sometimes people store {seconds, nanoseconds}
+  if (typeof ts?.seconds === "number") return ts.seconds * 1000;
+
+  return 0;
 }
 
-function normalizePlayerDoc(docId, data) {
-  const username = String(
-    data.username ?? data.playerName ?? data.name ?? docId ?? "unknown"
-  ).trim() || String(docId || "unknown");
+// LOCAL YYYY-MM-DD
+function ymdLocal(ms) {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
-  const totalScore = toNum(data.totalScore ?? data.score ?? data.total ?? 0);
+function getPickedDate() {
+  return (seasonDate?.value || "").trim(); // YYYY-MM-DD
+}
 
-  let lastPlayed = data.lastPlayed ?? data.last_played ?? data.updatedAt ?? 0;
-  lastPlayed = toNum(toMillisMaybe(lastPlayed));
+function getTimeMode() {
+  return (timeSelect?.value || "all").trim();
+}
 
-  return { id: docId, username, totalScore, lastPlayed };
+function rangeFilter(ms, mode) {
+  if (!ms) return false;
+
+  const now = new Date();
+  const d = new Date(ms);
+
+  if (mode === "daily") {
+    return ymdLocal(ms) === ymdLocal(now.getTime());
+  }
+
+  if (mode === "weekly") {
+    const diff = (now.getTime() - ms) / 86400000;
+    return diff >= 0 && diff < 7;
+  }
+
+  if (mode === "monthly") {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+
+  return true; // "all"
+}
+
+function normalizeHistoryDoc(data) {
+  const username = String(data.username ?? data.playerName ?? data.name ?? "").trim();
+
+  // Your bp26-score writes "score"
+  const score = toNum(data.score ?? data.delta ?? data.totalScore ?? 0);
+
+  const ts =
+    toMillisMaybe(data.timestamp) ||
+    toMillisMaybe(data.createdAt) ||
+    toMillisMaybe(data.updatedAt);
+
+  return { username, score, ts };
 }
 
 // ======================
-// Firestore fetch
+// Firestore helpers
 // ======================
 async function fetchGames() {
   const snap = await getDocs(collection(db, "zat-am"));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-async function fetchPlayers(gameId) {
-  const playersCol = collection(db, "zat-am", gameId, "players");
-  const snap = await getDocs(playersCol);
+async function fetchSeasonIds(gameId) {
+  // ✅ FIX: Global ALSO has seasons and must be included
+  if (!gameId) return [];
 
-  const list = snap.docs.map((d) => normalizePlayerDoc(d.id, d.data()));
-  list.sort((a, b) => b.totalScore - a.totalScore);
-  return list;
+  // bp26 is virtual aggregate (not a real seasons location)
+  if (gameId === "bp26") return [];
+
+  if (seasonsCache.has(gameId)) return seasonsCache.get(gameId);
+
+  const seasonsCol = collection(db, "zat-am", gameId, "seasons");
+  let ids = [];
+  try {
+    const snap = await getDocs(seasonsCol);
+    ids = snap.docs.map((d) => d.id);
+  } catch (e) {
+    ids = [];
+  }
+
+  ids.sort();
+  seasonsCache.set(gameId, ids);
+  return ids;
 }
 
-async function fetchPlayersAggregated(gameIds) {
-  const map = new Map(); // username -> {username,totalScore,lastPlayed}
+async function fetchHistoryForGame(gameId) {
+  const out = [];
 
-  for (const gid of gameIds) {
+  // current history
+  try {
+    const curSnap = await getDocs(collection(db, "zat-am", gameId, "gameHistory"));
+    curSnap.forEach((d) => out.push(normalizeHistoryDoc(d.data())));
+  } catch (e) {
+    // ok if doesn't exist
+  }
+
+  // seasons history
+  const seasonIds = await fetchSeasonIds(gameId);
+  for (const sid of seasonIds) {
     try {
-      const players = await fetchPlayers(gid);
-
-      for (const p of players) {
-        const key = String(p.username || p.id || "").trim();
-        if (!key) continue;
-
-        const prev = map.get(key) || { username: key, totalScore: 0, lastPlayed: 0 };
-        prev.totalScore += toNum(p.totalScore);
-        prev.lastPlayed = Math.max(prev.lastPlayed, toNum(p.lastPlayed));
-        map.set(key, prev);
-      }
-    } catch (err) {
-      console.error("Aggregate fetch failed for:", gid, err);
+      const sSnap = await getDocs(collection(db, "zat-am", gameId, "seasons", sid, "gameHistory"));
+      sSnap.forEach((d) => out.push(normalizeHistoryDoc(d.data())));
+    } catch (e) {
+      // ok
     }
   }
 
+  return out;
+}
+
+// aggregate history into leaderboard rows
+function aggregateHistory(history, { dateStr = "", timeMode = "all" } = {}) {
+  const map = new Map(); // username -> {username,totalScore,lastPlayed}
+
+  for (const h of history) {
+    if (!h.username) continue;
+
+    // ✅ IMPORTANT: skip invalid timestamps so they never mess filtering
+    if (!h.ts || h.ts <= 0) continue;
+
+    // If a date is picked, ONLY that date
+    if (dateStr) {
+      if (ymdLocal(h.ts) !== dateStr) continue;
+    } else {
+      // otherwise apply time filter
+      if (!rangeFilter(h.ts, timeMode)) continue;
+    }
+
+    const prev = map.get(h.username) || { username: h.username, totalScore: 0, lastPlayed: 0 };
+    prev.totalScore += toNum(h.score);
+    prev.lastPlayed = Math.max(prev.lastPlayed, toNum(h.ts));
+    map.set(h.username, prev);
+  }
+
   return Array.from(map.values()).sort((a, b) => b.totalScore - a.totalScore);
+}
+
+// bp26 aggregate across 5 games using history (date aware)
+async function loadBp26Aggregate() {
+  const dateStr = getPickedDate();
+  const timeMode = getTimeMode();
+
+  const gameIds = ["bp26-Game1", "bp26-Game2", "bp26-Game3", "bp26-Game4", "bp26-Game5"];
+
+  const all = new Map(); // username -> agg
+  for (const gid of gameIds) {
+    const hist = await fetchHistoryForGame(gid);
+    const rows = aggregateHistory(hist, { dateStr, timeMode });
+
+    for (const r of rows) {
+      const prev = all.get(r.username) || { username: r.username, totalScore: 0, lastPlayed: 0 };
+      prev.totalScore += toNum(r.totalScore);
+      prev.lastPlayed = Math.max(prev.lastPlayed, toNum(r.lastPlayed));
+      all.set(r.username, prev);
+    }
+  }
+
+  return Array.from(all.values()).sort((a, b) => b.totalScore - a.totalScore);
 }
 
 // ======================
@@ -127,6 +248,7 @@ async function fetchPlayersAggregated(gameIds) {
 function listDataOnly() {
   return playersData.slice(3);
 }
+
 function getTotalPages(list) {
   return Math.max(1, Math.ceil(list.length / perPage));
 }
@@ -181,13 +303,14 @@ nextBtn?.addEventListener("click", () => changePage(currentPage + 1));
 prevBtn?.addEventListener("click", () => changePage(currentPage - 1));
 
 // ======================
-// Chart.js
+// Chart.js (uses lastPlayed from history aggregation)
 // ======================
 const lineGraph = document.getElementById("line-graph");
 let myChart = null;
 
 function ensureChart() {
   if (!lineGraph || myChart) return;
+  if (typeof Chart === "undefined") return;
 
   const labels = [];
   for (let i = 6; i >= 0; i--) {
@@ -271,6 +394,8 @@ async function syncToggleStatus(gameId) {
 async function checkResetEligibility() {
   const gameId = currentGame;
 
+  if (!resetBtn || !resetHint) return;
+
   if (!gameId || gameId === "Global") {
     resetBtn.disabled = false;
     resetBtn.style.background = "";
@@ -283,6 +408,15 @@ async function checkResetEligibility() {
     resetBtn.style.background = "#ccc";
     resetHint.style.color = "#d30000";
     resetHint.textContent = "bp26 is aggregate. Reset individual games instead.";
+    return;
+  }
+
+  // only allow reset when no specific date is selected
+  if (getPickedDate()) {
+    resetBtn.disabled = true;
+    resetBtn.style.background = "#ccc";
+    resetHint.style.color = "#d30000";
+    resetHint.textContent = "Clear the date to reset current.";
     return;
   }
 
@@ -306,7 +440,11 @@ statusToggle?.addEventListener("change", async (e) => {
   const newState = e.target.checked;
 
   try {
-    await setDoc(doc(db, "zat-am", gameId), { competitionIsActive: newState }, { merge: true });
+    await setDoc(
+      doc(db, "zat-am", gameId),
+      { competitionIsActive: newState, updatedAt: serverTimestamp() },
+      { merge: true }
+    );
     await checkResetEligibility();
   } catch (err) {
     console.error("Update failed:", err);
@@ -315,13 +453,42 @@ statusToggle?.addEventListener("change", async (e) => {
   }
 });
 
+// ======================
+// ✅ Reset with archive
+// ======================
+function dateOnlyId(d = new Date()) {
+  return d.toISOString().split("T")[0]; // YYYY-MM-DD
+}
+
+async function findAvailableSeasonId(gameId, baseId) {
+  const baseRef = doc(db, "zat-am", gameId, "seasons", baseId);
+  const snap = await getDoc(baseRef);
+  if (!snap.exists()) return baseId;
+
+  let i = 2;
+  while (i < 500) {
+    const candidate = `${baseId}-${i}`;
+    const s = await getDoc(doc(db, "zat-am", gameId, "seasons", candidate));
+    if (!s.exists()) return candidate;
+    i++;
+  }
+  return `${baseId}-${Date.now()}`;
+}
+
 async function performReset(gameId) {
   if (gameId === "bp26") {
     alert("bp26 is aggregate. Reset one of: bp26-Game1..bp26-Game5");
     return;
   }
 
-  if (!confirm(`Are you sure you want to clear leaderboard for [${gameId}]?`)) return;
+  if (getPickedDate()) {
+    alert("Clear the date first (we only reset CURRENT).");
+    return;
+  }
+
+  if (!confirm(`Archive + reset CURRENT leaderboard for [${gameId}]?\n\nOld scores will be saved under seasons/`)) {
+    return;
+  }
 
   const playersColRef = collection(db, "zat-am", gameId, "players");
   const historyColRef = collection(db, "zat-am", gameId, "gameHistory");
@@ -332,24 +499,85 @@ async function performReset(gameId) {
   ]);
 
   if (playersSnap.empty && historySnap.empty) {
-    alert("Leaderboard is already cleared.");
+    alert("Nothing to reset (already empty).");
     return;
   }
 
-  const batch = writeBatch(db);
-  playersSnap.forEach((docu) => batch.delete(docu.ref));
-  historySnap.forEach((docu) => batch.delete(docu.ref));
-
   try {
-    await batch.commit();
-    alert(`Successfully reset ${gameId} leaderboard.`);
-    playersData = [];
-    currentPage = 1;
-    render();
-    renderChartFromPlayers(playersData);
+    const base = dateOnlyId(new Date());
+    const seasonId = await findAvailableSeasonId(gameId, base);
+
+    // create season doc
+    await setDoc(doc(db, "zat-am", gameId, "seasons", seasonId), {
+      seasonId,
+      seasonName: seasonId,
+      createdAt: serverTimestamp(),
+      playersCount: playersSnap.size,
+      historyCount: historySnap.size
+    });
+
+    async function copySnapToSeason(subName, snap) {
+      if (!snap || snap.empty) return;
+
+      const destCol = collection(db, "zat-am", gameId, "seasons", seasonId, subName);
+
+      let batch = writeBatch(db);
+      let n = 0;
+
+      for (const d of snap.docs) {
+        batch.set(doc(destCol, d.id), d.data(), { merge: false });
+        n++;
+        if (n % 450 === 0) {
+          await batch.commit();
+          batch = writeBatch(db);
+        }
+      }
+      await batch.commit();
+    }
+
+    await copySnapToSeason("players", playersSnap);
+    await copySnapToSeason("gameHistory", historySnap);
+
+    // delete current
+    let delBatch = writeBatch(db);
+    let delN = 0;
+
+    for (const d of playersSnap.docs) {
+      delBatch.delete(d.ref);
+      delN++;
+      if (delN % 450 === 0) {
+        await delBatch.commit();
+        delBatch = writeBatch(db);
+      }
+    }
+
+    for (const d of historySnap.docs) {
+      delBatch.delete(d.ref);
+      delN++;
+      if (delN % 450 === 0) {
+        await delBatch.commit();
+        delBatch = writeBatch(db);
+      }
+    }
+
+    await delBatch.commit();
+
+    await setDoc(
+      doc(db, "zat-am", gameId),
+      { updatedAt: serverTimestamp(), lastResetSeasonId: seasonId },
+      { merge: true }
+    );
+
+    // clear caches so new season appears
+    seasonsCache.delete(gameId);
+
+    alert(`✅ Archived to seasons/${seasonId} and reset CURRENT leaderboard for ${gameId}.`);
+
+    await loadLeaderboardForSelection();
+
   } catch (error) {
     console.error("Reset failed:", error);
-    alert("Error resetting leaderboard. Check console.");
+    alert("Reset failed. Check console.");
   }
 }
 
@@ -363,37 +591,56 @@ resetBtn?.addEventListener("click", () => {
 });
 
 // ======================
-// Filters
+// LOAD LOGIC
 // ======================
-gameSelect?.addEventListener("change", async (e) => {
-  currentGame = e.target.value;
-  currentPage = 1;
+async function loadLeaderboardForSelection() {
+  const dateStr = getPickedDate();
+  const timeMode = getTimeMode();
 
   try {
     if (currentGame === "bp26") {
-      playersData = await fetchPlayersAggregated([
-        "bp26-Game1",
-        "bp26-Game2",
-        "bp26-Game3",
-        "bp26-Game4",
-        "bp26-Game5"
-      ]);
+      playersData = await loadBp26Aggregate();
     } else {
-      playersData = await fetchPlayers(currentGame);
+      const hist = await fetchHistoryForGame(currentGame);
+      playersData = aggregateHistory(hist, { dateStr, timeMode });
     }
 
+    currentPage = 1;
     render();
     renderChartFromPlayers(playersData);
 
     await syncToggleStatus(currentGame);
     await checkResetEligibility();
+
+    console.log("LOAD =>", { game: currentGame, date: dateStr || "(none)", timeMode, rows: playersData.length });
   } catch (err) {
     console.error("Load failed:", err);
     alert("Failed to load leaderboard data. Check console (F12).");
   }
+}
+
+// ======================
+// Events
+// ======================
+gameSelect?.addEventListener("change", async (e) => {
+  currentGame = e.target.value;
+  await loadLeaderboardForSelection();
 });
 
-timeSelect?.addEventListener("change", () => render());
+timeSelect?.addEventListener("change", async () => {
+  await loadLeaderboardForSelection();
+});
+
+seasonDate?.addEventListener("change", async () => {
+  await loadLeaderboardForSelection();
+  await checkResetEligibility();
+});
+
+clearDateBtn?.addEventListener("click", async () => {
+  if (seasonDate) seasonDate.value = "";
+  await loadLeaderboardForSelection();
+  await checkResetEligibility();
+});
 
 // ======================
 // Init
@@ -408,20 +655,17 @@ async function init() {
   if (games && games.length) {
     games
       .map((g) => g.id)
-      .filter((id) => id !== "Global" && id !== "bp26")
+      .filter((id) => id !== "bp26")
       .sort()
-      .forEach((id) => gameSelect.options.add(new Option(id, id)));
+      .forEach((id) => {
+        if (id !== "bp26") gameSelect.options.add(new Option(id, id));
+      });
   }
 
   currentGame = "Global";
   gameSelect.value = "Global";
 
-  playersData = await fetchPlayers("Global");
-
-  render();
-  renderChartFromPlayers(playersData);
-
-  await syncToggleStatus(currentGame);
+  await loadLeaderboardForSelection();
   await checkResetEligibility();
 }
 

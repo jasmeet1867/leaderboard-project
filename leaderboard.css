@@ -1,3 +1,4 @@
+/* leaderboard.css */
 body {
   font-family: Arial, sans-serif;
   max-width: 900px;
@@ -48,10 +49,20 @@ h1 {
   flex-wrap: wrap;
 }
 
-select {
-  margin: 10px 5px;
-  padding: 8px;
+/* ✅ All dropdowns consistent */
+.controls select {
+  margin: 10px 0;
+  padding: 8px 10px;
   font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+}
+
+/* ✅ Season dropdown (optional highlight) */
+#seasonSelect {
+  min-width: 160px;
 }
 
 .podium {

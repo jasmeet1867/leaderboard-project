@@ -1,0 +1,196 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>अन्वेषणम्</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@sanskrit-coders/sanscript@1.1.0/sanscript.min.js"></script>
+  <script type="text/javascript" src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+
+  <style>
+    #svgdiv img { position: absolute; }
+    img:hover { filter: brightness(90%); opacity: 0.5; x-background: #e2e2e2; }
+    div { border: 1px solid red; }
+    svg:hover { x-width: 11%; }
+    .st0:hover { fill: red; }
+    .st1:hover { fill: yellow; }
+    .st2:hover { fill: blue; }
+    *[class^="st"]:hover { stroke: green; }
+
+    img[id$="1"] { transform: rotate(10deg); }
+    img[id$="2"] { transform: rotate(20deg); }
+    img[id$="3"] { transform: rotate(30deg); }
+    img[id$="4"] { transform: rotate(40deg); }
+    img[id$="5"] { transform: rotate(50deg); }
+    img[id$="6"] { transform: rotate(60deg); }
+    img[id$="7"] { transform: rotate(70deg); }
+    img[id$="8"] { transform: rotate(80deg); }
+    img[id$="9"] { transform: rotate(90deg); }
+  </style>
+</head>
+
+<body>
+  <center>
+    <h3>
+      Find <span style="position:relative;color:tomato;z-index:99" id="tofind"></span>
+      ... ❌ = <span id="wt">०</span>
+    </h3>
+  </center>
+
+  <div id="svgdiv"></div>
+  <p></p>
+
+  <script>
+    const BP26_GAME_ID = "bp26-Game3";
+    let timer = null;
+
+    let secs = 0;
+    function countSecs() { secs++; }
+
+    const wpp = 15;
+
+    const tlang = [];
+    tlang[1] = "itrans";
+    tlang["gu"] = "gujarati";
+    tlang["ka"] = "kannada";
+    tlang["be"] = "bengali";
+    tlang["ml"] = "malayalam";
+    tlang["te"] = "telugu";
+    tlang["ta"] = "tamil";
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let t = urlParams.get("t");
+    if (!t) t = 1;
+
+    let set = urlParams.get("s");
+    if (!set || isNaN(set)) set = 0;
+
+    let tofind = parseInt((Math.random() * 100) % wpp);
+    let wt = 1;
+
+    let gameFinished = false;
+
+    function computeScore(attempts, seconds) {
+      const wrongAttempts = Math.max(0, attempts - 1);
+      const score = 100 - (wrongAttempts * 5) - Math.floor(seconds / 2);
+      return Math.max(0, Math.floor(score));
+    }
+
+    async function submitScoreNow(finalScore) {
+      if (typeof window.reportScore !== "function") {
+        console.warn("[BP26] reportScore() not found. Check ./js/bp26-score.js path.");
+        return;
+      }
+      // ✅ will NEVER prompt now (even score = 0)
+      await window.reportScore(finalScore);
+      console.log("[BP26] ✅ Score submitted:", finalScore);
+    }
+
+    async function chk(id) {
+      if (gameFinished) return;
+
+      if (String(id) === String(tofind)) {
+        document.getElementById(id).style.background = "green";
+        document.getElementById(id).style.border = "1px solid green";
+
+        const attempts = wt;
+        const finalScore = computeScore(attempts, secs);
+
+        gameFinished = true;
+        await submitScoreNow(finalScore);
+
+        if (confirm(
+          "उत्तमम् !  You found it!\n" +
+          "After " + Sanscript.t(String(wt++), "iast", "devanagari") + " attempt(s)\n" +
+          "In " + Sanscript.t(String(secs), "iast", "devanagari") + " seconds!\n" +
+          "Score: " + finalScore + "\n\nपुनः ? Press 'ok' to play again"
+        )) {
+          window.location.reload();
+        }
+      } else {
+        document.getElementById(id).style.background = "pink";
+        document.getElementById(id).style.border = "1px dotted red";
+        $("#wt").html(Sanscript.t(String(wt++), "itrans", "devanagari"));
+      }
+    }
+
+    window.chk = chk;
+
+    document.addEventListener("DOMContentLoaded", function () {
+      secs = 0;
+      if (timer) clearInterval(timer);
+      timer = setInterval(countSecs, 1000);
+      countSecs();
+
+      const lnk = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6CFR_0gDsZl-lmwLFWmtdXMXYGVEHGJ8fvBu2_5wvbEl9L-4Yr0ugI0TFTTdvtLlMTRmLnCIJ5FBF/pub?gid=0&single=true&output=csv";
+      Papa.parse(lnk, { download: true, header: true, complete: populateWlist });
+    });
+
+    function populateWlist(fildat) {
+      const fullist = fildat.data || [];
+      if (set > fullist.length / wpp) set = 0;
+
+      const openmojibase = "https://openmoji.org/data/color/svg/";
+      const image = [];
+      const words = [];
+      const aud = [];
+      let imglnk = "";
+
+      for (let i = 0; i < wpp; i++) {
+        const row = fullist[(set * wpp) + i];
+        if (!row) continue;
+
+        words.push(row.padam);
+
+        const im = row["Imaage link"] || "";
+        if (im.length === 4 || im.length === 5) imglnk = openmojibase + im + ".svg";
+        else imglnk = im;
+
+        image.push(imglnk);
+        aud.push(row["alnk"]);
+      }
+
+      $("#tofind").html(
+        `<button id="${tofind}" onclick='musicelements[this.id].play()'>🔊</button> ${words[tofind]}`
+      );
+
+      if (t != 0 && tlang[t]) {
+        $("#tofind").append(" = " + Sanscript.t(words[tofind], "devanagari", tlang[t]));
+      }
+
+      for (let i = 0; i < words.length; i++) {
+        const positiontop = (Math.random() * (window.visualViewport.height - 121)) + 30;
+        const positionright = Math.random() * (window.visualViewport.width - 121);
+        const zindex = i;
+
+        const img = `
+          <img id="${i}" src="${image[i]}"
+            style="top:${positiontop}px; right:${positionright}px; z-index:${zindex};"
+            width="121" onclick="chk(this.id)">
+        `;
+
+        document.getElementById("svgdiv").innerHTML +=
+          img + `<audio id="${i}" src="${aud[i]}" preload="auto"></audio>`;
+      }
+
+      window.musicelements = document.getElementsByTagName("audio");
+
+      try { window.musicelements[tofind].play(); }
+      catch (e) { console.warn("[BP26] autoplay blocked", e); }
+    }
+  </script>
+
+  <!-- ✅ Score system: prompt ONCE at start -->
+  <script type="module">
+    import { bp26Init, reportScore, bp26PromptName } from "./js/bp26-score.js";
+
+    window.reportScore = reportScore;
+
+    // ✅ ask name every launch (start only)
+    bp26PromptName({ force: true });
+
+    // ✅ set game id
+    bp26Init({ game: "bp26-Game3" });
+  </script>
+</body>
+</html>

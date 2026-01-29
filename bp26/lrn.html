@@ -83,7 +83,6 @@
       document.getElementById("scoreValue").textContent = String(played.size);
     }
 
-    // ALWAYS show something
     function buildImageHTML({ imgm, unicodeHex, imgUrl }) {
       const u = (unicodeHex || "").trim();
       const img = (imgUrl || "").trim();
@@ -180,33 +179,41 @@
     }
   </script>
 
-  <!-- Firebase + ask name at START + submit button -->
+  <!-- ✅ Firebase + ask name on START + submit button -->
   <script type="module">
-    import "./js/bp26-score.js";
+    import { bp26Init, reportScore } from "./js/bp26-score.js";
 
-    // ✅ writes to: zat-am / bp26-Game1 / players / {userId}
-    // ✅ also increments: zat-am / bp26 / players / {userId}  (aggregate)
-    window.bp26Init({ game: "bp26-Game1", day: 1 });
+    // expose for non-module code if you want
+    window.reportScore = reportScore;
+
+    // ✅ Ask name EVERY time on launch
+    localStorage.removeItem("bp26_username");
+
+    // ✅ init this game
+    bp26Init({ game: "bp26-Game1" });
+
+    // ✅ Force prompt now (writes 0 history; totals unchanged)
+    await reportScore(0);
 
     const submitBtn = document.getElementById("submitScoreBtn");
 
     submitBtn.addEventListener("click", async () => {
       if (submitted) return;
 
-      // ✅ allow 0
       const score = Number(played.size) || 0;
 
       submitBtn.disabled = true;
       submitBtn.textContent = "Submitting...";
 
       try {
-        await window.reportScore(score);
+        await reportScore(score);
         submitted = true;
         submitBtn.textContent = `Submitted ✅ (Score: ${score})`;
       } catch (e) {
         console.error("❌ submit failed", e);
         submitBtn.disabled = false;
         submitBtn.textContent = "Submit Score (Day 1)";
+        alert("Submit failed. Open Console (F12) and send the red error.");
       }
     });
   </script>
