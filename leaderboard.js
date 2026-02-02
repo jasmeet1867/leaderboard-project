@@ -39,6 +39,7 @@ const gameSelect = document.getElementById("gameSelect");
 const timeSelect = document.getElementById("timeFilter");
 const seasonDate = document.getElementById("seasonDate");
 const clearDateBtn = document.getElementById("clearDateBtn");
+const applyTimeBtn = document.getElementById("applyTimeBtn");
 
 const leaderboardEl = document.getElementById("leaderboard");
 const prevBtn = document.getElementById("prevBtn");
@@ -57,6 +58,7 @@ let currentGame = "Global";
 let currentPage = 1;
 const perPage = 10;
 let playersData = [];
+let showAllDates = false; // ✅ flag for "All Dates" button
 
 // cache seasons list per game
 const seasonsCache = new Map(); // gameId -> [seasonId,...]
@@ -97,7 +99,8 @@ function getPickedDate() {
 }
 
 function getTimeMode() {
-  return (timeSelect?.value || "all").trim();
+  // empty string = no explicit filter (behaves like 'all')
+  return (timeSelect?.value ?? "").trim();
 }
 
 function rangeFilter(ms, mode) {
@@ -167,7 +170,7 @@ async function fetchSeasonIds(gameId) {
   return ids;
 }
 
-async function fetchHistoryForGame(gameId) {
+async function fetchHistoryForGame(gameId, { includeSeasons = true } = {}) {
   const out = [];
 
   // current history
@@ -178,14 +181,16 @@ async function fetchHistoryForGame(gameId) {
     // ok if doesn't exist
   }
 
-  // seasons history
-  const seasonIds = await fetchSeasonIds(gameId);
-  for (const sid of seasonIds) {
-    try {
-      const sSnap = await getDocs(collection(db, "zat-am", gameId, "seasons", sid, "gameHistory"));
-      sSnap.forEach((d) => out.push(normalizeHistoryDoc(d.data())));
-    } catch (e) {
-      // ok
+  // seasons history (only if includeSeasons is true)
+  if (includeSeasons) {
+    const seasonIds = await fetchSeasonIds(gameId);
+    for (const sid of seasonIds) {
+      try {
+        const sSnap = await getDocs(collection(db, "zat-am", gameId, "seasons", sid, "gameHistory"));
+        sSnap.forEach((d) => out.push(normalizeHistoryDoc(d.data())));
+      } catch (e) {
+        // ok
+      }
     }
   }
 
@@ -202,12 +207,31 @@ function aggregateHistory(history, { dateStr = "", timeMode = "all" } = {}) {
     // ✅ IMPORTANT: skip invalid timestamps so they never mess filtering
     if (!h.ts || h.ts <= 0) continue;
 
-    // If a date is picked, ONLY that date
+    // If a date is picked, apply date-aware filters.
     if (dateStr) {
-      if (ymdLocal(h.ts) !== dateStr) continue;
+      // start of picked date (local)
+      const pickedStart = new Date(dateStr + "T00:00:00").getTime();
+
+      if (timeMode === "weekly") {
+        // include the full day of the 7th day after picked date (e.g. Jan19 -> Jan26 inclusive)
+        const pickedEnd = pickedStart + 8 * 24 * 60 * 60 * 1000 - 1; // 8 days minus 1ms
+        if (h.ts < pickedStart || h.ts > pickedEnd) continue;
+      } else if (timeMode === "monthly") {
+        const dt = new Date(pickedStart);
+        const y = dt.getFullYear();
+        const m = dt.getMonth();
+        const monthStart = new Date(y, m, 1).getTime();
+        const monthEnd = new Date(y, m + 1, 1).getTime() - 1;
+        if (h.ts < monthStart || h.ts > monthEnd) continue;
+      } else {
+        // daily or unspecified: exact date match
+        if (ymdLocal(h.ts) !== dateStr) continue;
+      }
     } else {
-      // otherwise apply time filter
-      if (!rangeFilter(h.ts, timeMode)) continue;
+      // otherwise apply time filter relative to NOW (or 'all')
+      if (timeMode && timeMode !== "") {
+        if (!rangeFilter(h.ts, timeMode)) continue;
+      }
     }
 
     const prev = map.get(h.username) || { username: h.username, totalScore: 0, lastPlayed: 0 };
@@ -220,7 +244,7 @@ function aggregateHistory(history, { dateStr = "", timeMode = "all" } = {}) {
 }
 
 // bp26 aggregate across 5 games using history (date aware)
-async function loadBp26Aggregate() {
+async function loadBp26Aggregate({ includeSeasons = true } = {}) {
   const dateStr = getPickedDate();
   const timeMode = getTimeMode();
 
@@ -228,7 +252,7 @@ async function loadBp26Aggregate() {
 
   const all = new Map(); // username -> agg
   for (const gid of gameIds) {
-    const hist = await fetchHistoryForGame(gid);
+    const hist = await fetchHistoryForGame(gid, { includeSeasons });
     const rows = aggregateHistory(hist, { dateStr, timeMode });
 
     for (const r of rows) {
@@ -573,7 +597,14 @@ async function performReset(gameId) {
 
     alert(`✅ Archived to seasons/${seasonId} and reset CURRENT leaderboard for ${gameId}.`);
 
+    // Clear in-memory data and reload
+    playersData = [];
+    currentPage = 1;
+    render();
+    
+    // Then fetch fresh data from Firestore (should be empty)
     await loadLeaderboardForSelection();
+    console.log("Reset complete. Leaderboard cleared and reloaded with empty data.");
 
   } catch (error) {
     console.error("Reset failed:", error);
@@ -581,13 +612,24 @@ async function performReset(gameId) {
   }
 }
 
-resetBtn?.addEventListener("click", () => {
+resetBtn?.addEventListener("click", async () => {
   const gameId = gameSelect.value;
   if (!gameId || gameId === "Global") {
     alert("Select a game first (not Global).");
     return;
   }
-  performReset(gameId);
+
+  // If a date is selected, inform user and allow clearing it to proceed
+  const picked = getPickedDate();
+  if (picked) {
+    if (!confirm(`A date (${picked}) is selected. Reset only applies to CURRENT leaderboard (no date).\n\nPress OK to clear the date and continue with reset.`)) {
+      return;
+    }
+    if (seasonDate) seasonDate.value = "";
+  }
+
+  console.log("Attempting reset for:", gameId);
+  await performReset(gameId);
 });
 
 // ======================
@@ -598,10 +640,13 @@ async function loadLeaderboardForSelection() {
   const timeMode = getTimeMode();
 
   try {
+    // ✅ Include seasons if a specific date is picked OR "All Dates" was clicked
+    const includeSeasons = dateStr || showAllDates;
+
     if (currentGame === "bp26") {
-      playersData = await loadBp26Aggregate();
+      playersData = await loadBp26Aggregate({ includeSeasons });
     } else {
-      const hist = await fetchHistoryForGame(currentGame);
+      const hist = await fetchHistoryForGame(currentGame, { includeSeasons });
       playersData = aggregateHistory(hist, { dateStr, timeMode });
     }
 
@@ -612,7 +657,7 @@ async function loadLeaderboardForSelection() {
     await syncToggleStatus(currentGame);
     await checkResetEligibility();
 
-    console.log("LOAD =>", { game: currentGame, date: dateStr || "(none)", timeMode, rows: playersData.length });
+    console.log("LOAD =>", { game: currentGame, date: dateStr || "(none)", timeMode, showAllDates, rows: playersData.length });
   } catch (err) {
     console.error("Load failed:", err);
     alert("Failed to load leaderboard data. Check console (F12).");
@@ -624,22 +669,33 @@ async function loadLeaderboardForSelection() {
 // ======================
 gameSelect?.addEventListener("change", async (e) => {
   currentGame = e.target.value;
+  showAllDates = false; // ✅ reset flag when game changes
   await loadLeaderboardForSelection();
 });
 
-timeSelect?.addEventListener("change", async () => {
-  await loadLeaderboardForSelection();
+timeSelect?.addEventListener("change", () => {
+  // enable Apply only when a valid choice is picked
+  if (applyTimeBtn) applyTimeBtn.disabled = (timeSelect.value === "");
 });
 
 seasonDate?.addEventListener("change", async () => {
+  showAllDates = false; // ✅ reset flag when date is picked
   await loadLeaderboardForSelection();
   await checkResetEligibility();
 });
 
 clearDateBtn?.addEventListener("click", async () => {
   if (seasonDate) seasonDate.value = "";
+  showAllDates = true; // ✅ set flag to include all seasons
   await loadLeaderboardForSelection();
   await checkResetEligibility();
+});
+
+// Apply button triggers the time filter to be applied
+applyTimeBtn?.addEventListener("click", async () => {
+  // no-op if nothing selected
+  if (!timeSelect || (timeSelect.value || "") === "") return;
+  await loadLeaderboardForSelection();
 });
 
 // ======================

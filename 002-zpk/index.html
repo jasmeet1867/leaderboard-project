@@ -70,6 +70,14 @@
     ← Home
   </a>
 
+  <!-- ✅ Leaderboard: prompt for name at start -->
+  <script type="module">
+    import { bp26Init, reportScore, bp26PromptName } from "../bp26/js/bp26-score.js";
+    window.reportScore = reportScore;
+    bp26PromptName({ force: true });
+    bp26Init({ game: "002-zpk" });
+  </script>
+
   <!-- ✅ must be module for Firebase -->
   <script type="module" src="app.js"></script>
 </body>

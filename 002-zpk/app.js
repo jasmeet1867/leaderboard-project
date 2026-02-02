@@ -6,7 +6,9 @@ import {
   doc,
   setDoc,
   increment,
-  serverTimestamp
+  serverTimestamp,
+  collection,
+  addDoc
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // ✅ NEW Firebase config (temporary-db-e9ace)
@@ -25,7 +27,7 @@ const db = getFirestore(app);
 
 // ✅ CHANGE THIS to match your Firestore game document under zat-am
 // Examples: "002", "Rock Paper Scissors", "002-rps" — must match EXACTLY
-const GAME_ID = "Rock Paper Scissors";
+const GAME_ID = "002-zpk";
 
 
 // ---------------- GAME VARIABLES ----------------
@@ -45,22 +47,34 @@ const userLabelDiv = document.getElementById("user-label");
 let playerName = "Guest";
 let playerDocId = "Guest"; // ✅ In your DB, doc id itself is name (e.g., "Charles McGill")
 
-// ---------------- ASK NAME ----------------
-function askName() {
-  const input = prompt("Enter your name:", "Guest");
-  playerName = (input && input.trim()) ? input.trim() : "Guest";
-
-  // ✅ IMPORTANT:
-  // Your leaderboard uses doc IDs as names, so KEEP it readable.
-  // Firestore doc IDs allow spaces, so we can use the name directly.
-  playerDocId = playerName;
-
-  if (userLabelDiv) userLabelDiv.innerHTML = `${playerName}<br>mama<br>मम`;
-
-  console.log("Player:", playerName, "DocID:", playerDocId, "Game:", GAME_ID);
+// ✅ Get username from global leaderboard system
+function getUsername() {
+  if (typeof window.getUsernameFromLeaderboard === "function") {
+    return window.getUsernameFromLeaderboard();
+  }
+  // fallback: try localStorage from bp26-score.js
+  try {
+    return localStorage.getItem("bp26_username") || "Guest";
+  } catch (e) {
+    return "Guest";
+  }
 }
 
-// ---------------- FIRESTORE: ADD WIN (+1) ----------------
+// ✅ FIRESTORE: Report win score to leaderboard
+async function reportWinScore(score = 1) {
+  try {
+    if (typeof window.reportScore === "function") {
+      await window.reportScore(score);
+      console.log("✅ Score reported:", score);
+    }
+  } catch (error) {
+    console.error("❌ Score report failed:", error);
+  }
+}
+
+// ============================================
+// (Keep original Firestore logic for backup)
+// ============================================
 // ✅ updates BOTH:
 // 1) Global leaderboard: zat-am / Global / players / {playerDocId}
 // 2) Game leaderboard:   zat-am / {GAME_ID} / players / {playerDocId}
@@ -119,8 +133,8 @@ function win(userInput, compChoice) {
   document.getElementById(userInput).classList.add("win");
   setTimeout(() => document.getElementById(userInput).classList.remove("win"), 350);
 
-  // ✅ Save +1 in Firestore
-  addWinToFirestore();
+  // ✅ Report +1 score to leaderboard
+  reportWinScore(1);
 }
 
 function lose(userInput, compChoice) {
@@ -200,6 +214,14 @@ function main() {
   scissors_div.addEventListener("click", () => game("s"));
 }
 
+// ✅ Use username from leaderboard system
+function init() {
+  playerName = getUsername();
+  playerDocId = playerName;
+  if (userLabelDiv) userLabelDiv.innerHTML = `${playerName}<br>mama<br>मम`;
+  console.log("Game started with player:", playerName);
+  main();
+}
+
 // ✅ Start
-askName();
-main();
+init();

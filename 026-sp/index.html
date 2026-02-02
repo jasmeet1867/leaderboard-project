@@ -49,6 +49,14 @@
 
   </div>
 
+  <!-- ✅ Leaderboard: prompt for name at start -->
+  <script type="module">
+    import { bp26Init, reportScore, bp26PromptName } from "../bp26/js/bp26-score.js";
+    window.reportScore = reportScore;
+    bp26PromptName({ force: true });
+    bp26Init({ game: "026-sp" });
+  </script>
+
   <!-- ✅ Leaderboard bridge -->
   <script type="module">
     import { submitScore } from "../score-submit.js";
@@ -59,9 +67,10 @@
     function ensureName() {
       let name = (localStorage.getItem("zatam_username") || "").trim();
       if (!name) {
-        name = prompt("Enter your name for the leaderboard:", "Guest") || "Guest";
-        name = name.trim() || "Guest";
-        localStorage.setItem("zatam_username", name);
+        name = (localStorage.getItem("bp26_username") || "").trim();
+      }
+      if (!name) {
+        name = "Guest";
       }
       return name;
     }
@@ -70,7 +79,9 @@
       ensureName,
       awardWin: async () => {
         const name = ensureName();
-        await submitScore(GAME_ID, name, POINTS_PER_WIN);
+        if (window.reportScore) {
+          await window.reportScore(POINTS_PER_WIN);
+        }
         console.log("✅ 026-sp submitted:", name, POINTS_PER_WIN);
       }
     };

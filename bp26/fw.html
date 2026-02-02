@@ -24,6 +24,55 @@
     input:checked+.slider:before { transform: translateX(26px); }
     .slider.round { border-radius: 34px; }
     .slider.round:before { border-radius: 50%; }
+
+    /* ✅ Celebration UI (inline) */
+    #bp26CelebrateOverlay{
+      position: fixed; inset: 0;
+      display:none; align-items:center; justify-content:center;
+      background: rgba(0,0,0,0.35);
+      z-index: 10000;
+      padding: 20px;
+      border: none;
+    }
+    .bp26CelebrateBox{
+      position: relative;
+      width: min(460px, 92vw);
+      background: #fff;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+      text-align: center;
+      font-family: system-ui, Arial, sans-serif;
+      border: 1px solid #eee;
+    }
+    .bp26Sparkles{
+      font-size: 54px;
+      line-height: 1.1;
+      margin: 8px 0 6px;
+      animation: bp26Pop 600ms ease-out both;
+    }
+    @keyframes bp26Pop{
+      0%{ transform: scale(0.6); opacity: 0; }
+      100%{ transform: scale(1); opacity: 1; }
+    }
+    .bp26Btn{
+      margin-top: 12px; padding: 10px 14px;
+      border-radius: 12px; border: 1px solid #ddd;
+      background: #f9fafb; cursor: pointer;
+    }
+    .bp26Confetti{
+      position: fixed;
+      top: -12px;
+      width: 10px; height: 10px;
+      border-radius: 3px;
+      z-index: 10001;
+      opacity: .95;
+      animation: bp26Fall 950ms linear forwards;
+      pointer-events: none;
+    }
+    @keyframes bp26Fall{
+      to{ transform: translateY(110vh) rotate(540deg); opacity: 0.9; }
+    }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/@sanskrit-coders/sanscript@1.1.0/sanscript.min.js"></script>
@@ -78,9 +127,86 @@
     </div>
   </div>
 
+  <!-- ✅ Celebration overlay (inline) -->
+  <div id="bp26CelebrateOverlay">
+    <div class="bp26CelebrateBox">
+      <div class="bp26Sparkles">✨🎉✨</div>
+      <div id="bp26CelebrateTitle" style="font-weight:700;font-size:18px;margin-bottom:6px;">
+        Submitted ✅
+      </div>
+      <div id="bp26CelebrateSub" style="font-size:14px;color:#374151;">
+        Nice work!
+      </div>
+      <button id="bp26CelebrateClose" class="bp26Btn">Close</button>
+    </div>
+  </div>
+
+  <script>
+    // ✅ CHANGE THIS to your actual home page
+    const HOME_URL = "./index.html";
+    const GO_HOME_DELAY_MS = 6000;
+
+    /* ---------------------------
+       Celebration (inline)
+    --------------------------- */
+    function bp26Celebrate({ title="Submitted ✅", subtitle="Nice work!", score=null } = {}) {
+      const overlay = document.getElementById("bp26CelebrateOverlay");
+      const t = document.getElementById("bp26CelebrateTitle");
+      const s = document.getElementById("bp26CelebrateSub");
+
+      t.textContent = title;
+      s.textContent = score === null ? subtitle : `${subtitle}  Score: ${score} ✨`;
+
+      overlay.style.display = "flex";
+      bp26BurstConfetti(70);
+
+      setTimeout(() => { overlay.style.display = "none"; }, 2200);
+    }
+
+    function bp26BurstConfetti(count=60) {
+      for (let i = 0; i < count; i++) {
+        const c = document.createElement("div");
+        c.className = "bp26Confetti";
+        c.style.left = Math.random() * 100 + "vw";
+        c.style.width = (6 + Math.random() * 8) + "px";
+        c.style.height = (6 + Math.random() * 8) + "px";
+        c.style.background = `hsl(${Math.floor(Math.random() * 360)}, 90%, 60%)`;
+        c.style.transform = `translateY(0) rotate(${Math.random() * 180}deg)`;
+        c.style.animationDuration = (800 + Math.random() * 600) + "ms";
+        document.body.appendChild(c);
+        setTimeout(() => c.remove(), 1600);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const closeBtn = document.getElementById("bp26CelebrateClose");
+      const overlay = document.getElementById("bp26CelebrateOverlay");
+      if (closeBtn) closeBtn.addEventListener("click", () => overlay.style.display = "none");
+      if (overlay) overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) overlay.style.display = "none";
+      });
+    });
+  </script>
+
   <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
     integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
     crossorigin="anonymous"></script>
+
+  <!-- ✅ Score system: prompt ONCE at start -->
+  <script type="module">
+    import { bp26Init, reportScore, bp26PromptName } from "./js/bp26-score.js";
+
+    window.reportScore = reportScore;
+
+    // ask name at start of the page load
+    await bp26PromptName({ force: true });
+
+    // game id
+    bp26Init({ game: "bp26-Game4" });
+
+    // optional: write 0 history so user appears (safe)
+    try { await reportScore(0); } catch (e) { console.warn("initial 0 submit failed", e); }
+  </script>
 
   <script>
     // ======================
@@ -90,7 +216,6 @@
     const BP26_DAY = 3;
 
     // scoring settings
-    // Score formula:
     // score = max(0, (wordsFound*10) - ((clicks - wordsFound)*2))
     function computeScore(wordsTotal, clicks) {
       const raw = (wordsTotal * 10) - ((clicks - wordsTotal) * 2);
@@ -204,7 +329,12 @@
         }
       };
 
+      // ✅ prevent double finish
+      let bp26Finished = false;
+
       var cellClick = async function (e) {
+        if (bp26Finished) return;
+
         nc++;
         var cell = $(e.target).closest("td").get(0);
         nAnswersDiscovered += processCell(cell).length;
@@ -212,27 +342,42 @@
         $("#nFound").text(String.fromCharCode(0x0966 + nAnswersDiscovered));
 
         if (nAnswersDiscovered == nAnswersPresent) {
+          bp26Finished = true;
+
           // ✅ compute score
           var score = computeScore(nAnswersPresent, nc);
 
           // ✅ submit score to Firestore (even if 0)
+          let submitOk = true;
           try {
-            if (window.reportScore) {
+            if (typeof window.reportScore === "function") {
               await window.reportScore(score);
+            } else {
+              submitOk = false;
+              console.warn("reportScore not found");
             }
           } catch (err) {
+            submitOk = false;
             console.error("Score submit failed:", err);
           }
 
+          // ✅ show celebration first (no alert/confirm to block it)
+          bp26Celebrate({
+            title: submitOk ? "Score Submitted ✅" : "Finished ✅",
+            subtitle: submitOk ? "Great job!" : "Saved locally (Firebase not ready)",
+            score: score
+          });
+
+          // show finish UI text
           $("#finishMessage").append("<br>AFTER " + nc + " clicks!");
-          alert("You found " + nAnswersPresent + " words\nAFTER " + nc + " clicks!\nScore: " + score);
-
-          var ask = confirm("पुनः ? Press 'ok' to play again");
-          if (ask) window.location.reload();
-
           $("#finishMessage").show();
           $("#statusMessage").hide();
           $("#lead").hide();
+
+          // ✅ go home after 6 seconds
+          setTimeout(() => {
+            window.location.href = HOME_URL;
+          }, GO_HOME_DELAY_MS);
         }
       };
 
@@ -279,7 +424,7 @@
       var markMatch = function (startRowIdx, startColIdx, endRowIdx, endColIdx, word) {
         if (!stringToCss[word]) {
           var nCssUsed = Object.keys(stringToCss).length;
-          stringToCss[word] = (nCssUsed > MAX_MARKER_IDX) ? "markerX" : ("marker" + nCssUsed);
+          stringToCss[word] = (nCssUsed > 6) ? "markerX" : ("marker" + nCssUsed);
         }
 
         $("#tblCell_" + startRowIdx + "_" + startColIdx).addClass("found");
@@ -500,17 +645,6 @@
       }
     }
   </script>
-
-  <!-- IMPORTANT: This is your Firestore score file -->
-  <script type="module" src="./js/bp26-score.js"></script>
-
-  <!-- IMPORTANT: Initialize BP26 (prompts name every time) -->
-  <script type="module">
-  import { bp26Init, reportScore } from "./js/bp26-score.js";
-  window.reportScore = reportScore;
-  bp26Init({ game: "bp26-Game4" });
-</script>
-
 
 </body>
 </html>

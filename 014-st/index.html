@@ -41,12 +41,20 @@
     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
   ">← Home</a>
 
+  <!-- ✅ Leaderboard: prompt for name at start -->
+  <script type="module">
+    import { bp26Init, reportScore, bp26PromptName } from "../bp26/js/bp26-score.js";
+    window.reportScore = reportScore;
+    bp26PromptName({ force: true });
+    bp26Init({ game: "014-st" });
+  </script>
+
   <!-- ✅ Leaderboard bridge (uses NEW firebase inside ../score-submit.js) -->
   <script type="module">
     import { submitScore } from "../score-submit.js";
 
     // Must match your leaderboard game id / dropdown id
-    const GAME_ID = "GAME 014";
+    const GAME_ID = "014-st";
 
     // expose to typer.js (normal script)
     window.zatamSubmit = (playerName, points) => submitScore(GAME_ID, playerName, points);

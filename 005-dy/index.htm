@@ -45,6 +45,14 @@
     <h1 id="jayaH"></h1>
   </div>
 
+  <!-- ✅ Leaderboard: prompt for name at start -->
+  <script type="module">
+    import { bp26Init, reportScore, bp26PromptName } from "../bp26/js/bp26-score.js";
+    window.reportScore = reportScore;
+    bp26PromptName({ force: true });
+    bp26Init({ game: "005-dy" });
+  </script>
+
   <!-- ✅ Firebase bridge (SAME leaderboard system as your site) -->
   <script type="module">
     import { submitScore } from "../score-submit.js";
